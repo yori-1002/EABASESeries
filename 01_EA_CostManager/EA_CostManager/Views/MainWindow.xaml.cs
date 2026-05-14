@@ -109,6 +109,32 @@ namespace EA_CostManager.Views
                 {
                     await main_vm.refresh_online_users_async();
                     main_vm.start_heartbeat();
+
+                    // ▼ 追加 [v1.0.3] 起動時表示ページ設定の反映
+                    //   v1.0.2 までは UserSettings.startup_page を読んで起動時の
+                    //   表示ページを切り替える実装が存在しなかった（実装漏れ）。
+                    //   このため、ユーザーが詳細設定で「原価集計」を選択して保存・再起動しても
+                    //   毎回ダッシュボードで起動していた。バグ②の根本原因。
+                    //
+                    //   navigate_to_cost_command を Execute すれば、サイドバーの
+                    //   「原価集計」クリックと完全に同じ挙動（current_page="cost" +
+                    //   is_cost_expanded=true で大区分ツリー展開）になる。
+                    //   既存ロジックを再利用することで挙動の一貫性も担保される。
+                    //
+                    //   "dashboard" の場合は何もしない（current_page の既定値が "dashboard" のため）。
+                    try
+                    {
+                        var startup_settings = EA_CostManager.UserSettingsManager.current;
+                        if (startup_settings.startup_page == "cost")
+                        {
+                            main_vm.navigate_to_cost_command.Execute(null);
+                        }
+                    }
+                    catch (System.Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[MainWindow] 起動時ページ反映失敗: {ex.GetType().Name} : {ex.Message}");
+                    }
                 }
             };
 

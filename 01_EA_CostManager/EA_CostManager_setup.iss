@@ -6,7 +6,7 @@
 ;
 ; 使い方：
 ;   1. dotnet publish で単一exeを生成
-;      cd "D:\00_MyFile\00_Developer\02_C#\01_Earth Analyzer Business Administration System\EABASE Series\01_EA_CostManager"
+;      cd "D:\00_MyFile\00_Developer\04_Earth Analyzer Business Administration System\01_EABASE Series\01_EA_CostManager\publish"
 ;      dotnet clean -c Release
 ;      dotnet publish -c Release -r win-x64 --self-contained true `
 ;        -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
@@ -20,7 +20,7 @@
 
 ; ▼ 修正：表示名は CostManager（要件：ソフト名称はCostManager）
 #define MyAppName      "CostManager"
-#define MyAppVersion   "1.0.2"
+#define MyAppVersion   "1.0.3"
 #define MyAppPublisher "EABASE Series"
 
 ; ▼ 修正：exe名は CostManager.exe（csproj の AssemblyName と一致）
@@ -28,7 +28,7 @@
 
 ; ▼ 修正：publish フォルダの正確なパス（dotnet publish -o .\publish の出力先）
 ;   ※ ローカル開発フォルダパス。フォルダ整理時はここも要修正
-#define MySourceDir    "D:\00_MyFile\00_Developer\02_C#\01_Earth Analyzer Business Administration System\EABASE Series\01_EA_CostManager\publish"
+#define MySourceDir    "D:\00_MyFile\00_Developer\04_Earth Analyzer Business Administration System\01_EABASE Series\01_EA_CostManager\publish"
 
 [Setup]
 ; ▼ アプリ識別子（絶対変更禁止）

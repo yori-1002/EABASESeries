@@ -108,7 +108,19 @@ namespace EA_CostManager
                     return _cache;
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // ▼ 修正 [v1.0.3] catch{} の握りつぶしを廃止
+                //   旧実装は例外を完全に隠していたため、JSON破損などで読み込み失敗しても
+                //   サイレントにデフォルト値で復帰していた。これがバグ①「保存して再起動で
+                //   接続できない」の根本原因と推定される（破損JSONがデフォルト値に置き換わり、
+                //   NASパス設定が失われてローカルDBで起動するため、ユーザーから見ると
+                //   業務データが消えたように見える）。
+                //   v1.0.3 では例外内容をDebug出力し、破損ファイルを退避して原因追跡可能にする。
+                System.Diagnostics.Debug.WriteLine(
+                    $"[UserSettingsManager] load 失敗: {ex.GetType().Name} : {ex.Message}");
+                try_quarantine_broken_settings(ex);
+            }
             _cache = new UserSettings();
             return _cache;
         }
@@ -124,11 +136,31 @@ namespace EA_CostManager
 
                 var options = new JsonSerializerOptions { WriteIndented = true };
                 string json = JsonSerializer.Serialize(settings, options);
-                File.WriteAllText(SETTINGS_PATH, json);
+
+                // ▼ 修正 [v1.0.3] File.WriteAllText → FileStream.Flush(true) で
+                //   OSバッファまで強制書き込みする方式に変更。
+                //   旧実装は OS のディスクキャッシュにとどまる可能性があり、
+                //   この直後にアプリが再起動されると JSON が中途半端な状態でディスクに残り、
+                //   次回起動時の load() で JSON 破損として検出される問題があった。
+                //   FileStream.Flush(true) は flushToDisk=true でOSバッファをフラッシュし、
+                //   再起動シーケンスに対する堅牢性を確保する。
+                using (var fs = new FileStream(SETTINGS_PATH, FileMode.Create, FileAccess.Write, FileShare.Read))
+                using (var writer = new StreamWriter(fs))
+                {
+                    writer.Write(json);
+                    writer.Flush();
+                    fs.Flush(true);  // ★ OSバッファまで強制書き込み
+                }
+
                 _cache = settings;
             }
             catch (Exception ex)
             {
+                // ▼ 修正 [v1.0.3] 例外をDebug出力に記録（旧実装はMessageBoxのみで
+                //   ログには残らなかった。再現性の追跡を可能にする）
+                System.Diagnostics.Debug.WriteLine(
+                    $"[UserSettingsManager] save 失敗: {ex.GetType().Name} : {ex.Message}");
+
                 MessageBox.Show(
                     $"設定の保存に失敗しました。\n{ex.Message}",
                     "保存エラー",
@@ -138,6 +170,35 @@ namespace EA_CostManager
         }
 
         public static void clear_cache() => _cache = null;
+
+        // ▼ 追加 [v1.0.3] 破損した設定ファイルを退避するヘルパー
+        //   load() でJSON破損などの例外が発生したとき、破損ファイルを
+        //   .broken_yyyyMMdd_HHmmss にリネームして退避する。
+        //   これにより：
+        //   ・次回起動時に空の状態（デフォルト値）から再構築されるが、
+        //   ・退避ファイルは後から手動で復旧可能（中身を確認・修復してリネーム）
+        //   ・サポート時の調査資料としても残せる
+        //   退避自体に失敗してもアプリは続行する（致命的ではない）。
+        private static void try_quarantine_broken_settings(Exception originalEx)
+        {
+            try
+            {
+                if (!File.Exists(SETTINGS_PATH)) return;
+
+                string quarantine_path = SETTINGS_PATH +
+                    ".broken_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+                File.Move(SETTINGS_PATH, quarantine_path);
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"[UserSettingsManager] 破損設定ファイルを退避: {quarantine_path} (元例外: {originalEx.GetType().Name})");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[UserSettingsManager] 破損設定ファイル退避に失敗: {ex.GetType().Name} : {ex.Message}");
+            }
+        }
 
         // ▼ 追加 [v1.0.1] 旧パス→新パスへのマイグレーション処理
         //   v1.0.0以前は exe隣（Program Files (x86) 配下）に保存していたため、

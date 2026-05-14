@@ -125,17 +125,35 @@ namespace EA_CostManager.Views
                     else
                     {
                         // サブ画像が1つも無い異常ケース（破損 ICO 等）
+                        // ▼ 追加 [v1.0.3] 異常ケースをDebug出力に記録
+                        //   旧実装は静かに非表示にしていたため、
+                        //   「映ってたのに急に表示されなくなる人がいる」現象の原因追跡ができなかった。
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[SplashWindow] icon_fix.ico にサブ画像が1つも無い（破損の可能性）: {icon_path}");
                         app_icon.Visibility = Visibility.Collapsed;
                     }
                 }
                 else
                 {
+                    // ▼ 追加 [v1.0.3] アイコンファイル不在をDebug出力に記録
+                    //   インストール不備・アンチウイルスによる削除・PublishSingleFile展開失敗
+                    //   などのケースで発生する可能性がある。
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[SplashWindow] icon_fix.ico が見つかりません: {icon_path}");
+
                     // アイコンファイルが見つからない場合は非表示にする
                     app_icon.Visibility = Visibility.Collapsed;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                // ▼ 修正 [v1.0.3] catch{} の握りつぶしを廃止
+                //   旧実装は例外内容を完全に隠していたため、
+                //   IconBitmapDecoder が稀に投げる例外（ファイル権限・IOロック・破損ICO等）の
+                //   原因追跡ができなかった。Debug出力に例外型とメッセージを記録する。
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SplashWindow] アイコン読み込み例外: {ex.GetType().Name} : {ex.Message}");
+
                 // 読込失敗時はアイコン領域を非表示にする
                 // スプラッシュ全体の動作には影響させない
                 try { app_icon.Visibility = Visibility.Collapsed; } catch { }

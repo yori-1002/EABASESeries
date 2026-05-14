@@ -86,11 +86,39 @@ namespace EA_CostManager.Views
         {
             if (DataContext is not settings_view_model vm) return;
 
+            // ▼ 修正 [v1.0.3] 二重クリック防止
+            if (sender is System.Windows.Controls.Button btn)
+                btn.IsEnabled = false;
+
             // まず保存（即時反映も実行される）
             vm.save_advanced_command.Execute(null);
 
-            // DB書き込み完了を少し待つ
-            await System.Threading.Tasks.Task.Delay(400);
+            // ▼ 修正 [v1.0.3] 400ms固定待ち → is_busy ループ待ち（最大5秒）に変更
+            //   旧実装は Task.Delay(400) の固定待ちだったが、
+            //   save_advanced_async() 内部の Task.Delay(300) と非常に近接しており、
+            //   システムビジー時に逆転して保存未完了で再起動するケースがあった。
+            //   これがバグ②「起動時表示ページが反映されない」の原因と推定される。
+            //   btn_save_db_and_restart_Click と同じ is_busy ループ方式に統一する。
+            int wait_count = 0;
+            while (vm.is_busy && wait_count < 50)  // 100ms × 50 = 5秒
+            {
+                await System.Threading.Tasks.Task.Delay(100);
+                wait_count++;
+            }
+
+            // ▼ 追加 [v1.0.3] 保存結果にエラーが含まれている場合は再起動を中断
+            if (vm.status_message.StartsWith("❌"))
+            {
+                System.Windows.MessageBox.Show(
+                    $"設定の保存に失敗したため再起動をキャンセルしました。\n\n{vm.status_message}",
+                    "保存エラー",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+
+                if (sender is System.Windows.Controls.Button btn2)
+                    btn2.IsEnabled = true;
+                return;
+            }
 
             // 自動再起動
             app_restart_helper.restart();
