@@ -1,0 +1,402 @@
+﻿<Window x:Class="EA_DailyReport.Views.Dialogs.InputDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:ctrl="clr-namespace:EA_DailyReport.Controls"
+        mc:Ignorable="d"
+        x:Name="this_dialog"
+        Title="日報入力"
+        Height="640" Width="1100"
+        MinHeight="500" MinWidth="900"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource brush_bg_main}">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ===== タイトル ===== -->
+        <TextBlock Grid.Row="0"
+                   x:Name="txt_dialog_title"
+                   Text="日報入力"
+                   Style="{StaticResource style_page_title}"/>
+
+        <!-- ===== 1段目：日付・氏名 ===== -->
+        <Border Grid.Row="1"
+                Style="{StaticResource style_card}"
+                Padding="15,12"
+                Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="日付："
+                           VerticalAlignment="Center"
+                           FontWeight="SemiBold"
+                           Margin="0,0,8,0"/>
+                <DatePicker x:Name="dp_report_date"
+                            Width="140"
+                            VerticalAlignment="Center"
+                            SelectedDateChanged="report_date_or_name_changed"/>
+
+                <TextBlock Text="氏名："
+                           VerticalAlignment="Center"
+                           FontWeight="SemiBold"
+                           Margin="25,0,8,0"/>
+                <ComboBox x:Name="cmb_employee"
+                          Width="160"
+                          VerticalAlignment="Center"
+                          IsEditable="True"
+                          IsTextSearchEnabled="True"
+                          StaysOpenOnEdit="True"
+                          SelectionChanged="report_date_or_name_changed"
+                          LostFocus="report_date_or_name_changed"/>
+                <TextBlock Text="（自動でアクセスユーザー・代理入力可）"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource brush_text_secondary}"
+                           FontSize="11"
+                           Margin="10,0,0,0"/>
+
+                <!-- ▼ 追加：v0.1.6 既存日報検出時の表示 -->
+                <Border x:Name="border_existing_warning"
+                        Background="#FFF4E5"
+                        BorderBrush="{StaticResource brush_warning}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="8,3"
+                        Margin="20,0,0,0"
+                        Visibility="Collapsed"
+                        VerticalAlignment="Center">
+                    <TextBlock Text="📝 既存の日報あり：出退勤と場所はロック中"
+                               Foreground="{StaticResource brush_warning}"
+                               FontSize="11"
+                               FontWeight="SemiBold"/>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- ===== 2段目：出退勤・場所・自動算出 ===== -->
+        <Border Grid.Row="2"
+                Style="{StaticResource style_card}"
+                Padding="15,12"
+                Margin="0,0,0,10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- 出退勤・場所入力 -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal">
+                    <TextBlock Text="出勤："
+                               VerticalAlignment="Center"
+                               FontWeight="SemiBold"
+                               Margin="0,0,8,0"/>
+                    <TextBox x:Name="txt_clock_in"
+                             Width="70" Padding="6,4"
+                             VerticalAlignment="Center"
+                             Text="08:30"
+                             TextChanged="time_or_settings_changed"/>
+
+                    <TextBlock Text="退勤："
+                               VerticalAlignment="Center"
+                               FontWeight="SemiBold"
+                               Margin="20,0,8,0"/>
+                    <TextBox x:Name="txt_clock_out"
+                             Width="70" Padding="6,4"
+                             VerticalAlignment="Center"
+                             Text="17:30"
+                             TextChanged="time_or_settings_changed"/>
+
+                    <!-- ▼ 追加：v0.1.6 ロック解除ボタン（ロック時のみ表示）-->
+                    <Button x:Name="btn_unlock"
+                            Content="🔓 ロック解除"
+                            Padding="10,4"
+                            Margin="15,0,0,0"
+                            Background="{StaticResource brush_warning}"
+                            Foreground="White"
+                            BorderThickness="0"
+                            FontSize="11"
+                            Cursor="Hand"
+                            Visibility="Collapsed"
+                            VerticalAlignment="Center"
+                            Click="btn_unlock_Click"
+                            ToolTip="既存日報の出退勤・場所を編集可能にします（要注意）"/>
+
+                    <TextBlock Text="開始場所："
+                               VerticalAlignment="Center"
+                               FontWeight="SemiBold"
+                               Margin="25,0,8,0"/>
+                    <ComboBox x:Name="cmb_start_location"
+                              Width="100"
+                              VerticalAlignment="Center"
+                              IsEditable="True"
+                              Text="本社">
+                        <ComboBoxItem>本社</ComboBoxItem>
+                        <ComboBoxItem>現場</ComboBoxItem>
+                        <ComboBoxItem>リモート</ComboBoxItem>
+                        <ComboBoxItem>駐在所</ComboBoxItem>
+                    </ComboBox>
+
+                    <TextBlock Text="終了場所："
+                               VerticalAlignment="Center"
+                               FontWeight="SemiBold"
+                               Margin="20,0,8,0"/>
+                    <ComboBox x:Name="cmb_end_location"
+                              Width="100"
+                              VerticalAlignment="Center"
+                              IsEditable="True"
+                              Text="本社">
+                        <ComboBoxItem>本社</ComboBoxItem>
+                        <ComboBoxItem>現場</ComboBoxItem>
+                        <ComboBoxItem>リモート</ComboBoxItem>
+                        <ComboBoxItem>駐在所</ComboBoxItem>
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- 自動算出表示 -->
+                <Border Grid.Row="1"
+                        Background="#EDF4FA"
+                        CornerRadius="4"
+                        Padding="12,8"
+                        Margin="0,10,0,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🧮 自動算出："
+                                   VerticalAlignment="Center"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource brush_accent_hover}"/>
+                        <TextBlock Text="早朝 "
+                                   VerticalAlignment="Center"
+                                   Margin="15,0,3,0"/>
+                        <TextBlock x:Name="txt_calc_early"
+                                   Text="0:00"
+                                   FontFamily="Consolas"
+                                   VerticalAlignment="Center"
+                                   FontWeight="Bold"
+                                   Foreground="{StaticResource brush_text_primary}"/>
+                        <TextBlock Text="  /  残業 "
+                                   VerticalAlignment="Center"
+                                   Margin="10,0,3,0"/>
+                        <TextBlock x:Name="txt_calc_overtime"
+                                   Text="0:00"
+                                   FontFamily="Consolas"
+                                   VerticalAlignment="Center"
+                                   FontWeight="Bold"
+                                   Foreground="{StaticResource brush_text_primary}"/>
+                        <TextBlock Text="  /  深夜 "
+                                   VerticalAlignment="Center"
+                                   Margin="10,0,3,0"/>
+                        <TextBlock x:Name="txt_calc_late_night"
+                                   Text="0:00"
+                                   FontFamily="Consolas"
+                                   VerticalAlignment="Center"
+                                   FontWeight="Bold"
+                                   Foreground="{StaticResource brush_text_primary}"/>
+                        <TextBlock Text="（定時：日本 8:30〜17:30）"
+                                   VerticalAlignment="Center"
+                                   Margin="20,0,0,0"
+                                   Foreground="{StaticResource brush_text_secondary}"
+                                   FontSize="11"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- ===== 3段目：作業詳細（複数行 DataGrid） ===== -->
+        <Border Grid.Row="3"
+                Style="{StaticResource style_card}"
+                Padding="15,12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 行追加・削除ボタン -->
+                <Grid Grid.Row="0" Margin="0,0,0,10">
+                    <TextBlock Text="作業詳細（複数行入力可能・セルクリックで候補表示）"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource brush_text_primary}"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="btn_add_row"
+                                Content="+ 行追加"
+                                Padding="14,5"
+                                Background="{StaticResource brush_success}"
+                                Foreground="White"
+                                BorderThickness="0"
+                                FontSize="12"
+                                Cursor="Hand"
+                                Click="btn_add_row_Click"/>
+                        <Button x:Name="btn_remove_row"
+                                Content="- 選択行削除"
+                                Padding="14,5"
+                                Background="{StaticResource brush_danger}"
+                                Foreground="White"
+                                BorderThickness="0"
+                                FontSize="12"
+                                Cursor="Hand"
+                                Margin="8,0,0,0"
+                                Click="btn_remove_row_Click"/>
+                    </StackPanel>
+                </Grid>
+
+                <!--
+                    作業詳細 DataGrid（v0.1.6 改修）
+                    各セルを DataGridTemplateColumn にして AutoCompleteTextBox を埋め込む
+                    マスタ候補は Window の DataContext 経由でバインド：
+                      ItemsSource="{Binding category_list,
+                                    RelativeSource={RelativeSource AncestorType=Window}}"
+                    Window.DataContext は分離してないので、x:Name で参照する：
+                      ItemsSource="{Binding ElementName=this_dialog, Path=category_list}"
+                -->
+                <DataGrid x:Name="grid_details"
+                          Grid.Row="1"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          IsReadOnly="False"
+                          SelectionMode="Single"
+                          HeadersVisibility="Column"
+                          GridLinesVisibility="All"
+                          HorizontalGridLinesBrush="{StaticResource brush_border}"
+                          VerticalGridLinesBrush="{StaticResource brush_border}"
+                          RowHeight="32"
+                          ColumnHeaderHeight="36"
+                          FontSize="12">
+                    <DataGrid.Columns>
+
+                        <!-- 区分（オートコンプリート） -->
+                        <DataGridTemplateColumn Header="区分" Width="80">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <ctrl:AutoCompleteTextBox
+                                        Text="{Binding category_code,
+                                               UpdateSourceTrigger=PropertyChanged,
+                                               Mode=TwoWay}"
+                                        ItemsSource="{Binding ElementName=this_dialog,
+                                                              Path=category_list}"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- 業務名（オートコンプリート） -->
+                        <DataGridTemplateColumn Header="業務名" Width="130">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <ctrl:AutoCompleteTextBox
+                                        Text="{Binding project_name,
+                                               UpdateSourceTrigger=PropertyChanged,
+                                               Mode=TwoWay}"
+                                        ItemsSource="{Binding ElementName=this_dialog,
+                                                              Path=project_name_list}"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- 詳細（普通の TextBox・候補なし） -->
+                        <DataGridTextColumn Header="詳細"
+                                            Binding="{Binding detail, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="*"/>
+
+                        <!-- 時間 -->
+                        <DataGridTextColumn Header="時間(h)"
+                                            Binding="{Binding hours, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="65"/>
+
+                        <!-- ソフト・機材（オートコンプリート） -->
+                        <DataGridTemplateColumn Header="ソフト・機材" Width="120">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <ctrl:AutoCompleteTextBox
+                                        Text="{Binding software,
+                                               UpdateSourceTrigger=PropertyChanged,
+                                               Mode=TwoWay}"
+                                        ItemsSource="{Binding ElementName=this_dialog,
+                                                              Path=software_list}"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- 料金 -->
+                        <DataGridTextColumn Header="料金"
+                                            Binding="{Binding software_cost, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="65"/>
+
+                        <!-- 車両（オートコンプリート） -->
+                        <DataGridTemplateColumn Header="車両" Width="110">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <ctrl:AutoCompleteTextBox
+                                        Text="{Binding vehicle,
+                                               UpdateSourceTrigger=PropertyChanged,
+                                               Mode=TwoWay}"
+                                        ItemsSource="{Binding ElementName=this_dialog,
+                                                              Path=vehicle_list}"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- 発 -->
+                        <DataGridTextColumn Header="発"
+                                            Binding="{Binding from_location, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="80"/>
+
+                        <!-- 着 -->
+                        <DataGridTextColumn Header="着"
+                                            Binding="{Binding to_location, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="80"/>
+
+                        <!-- 距離 -->
+                        <DataGridTextColumn Header="距離"
+                                            Binding="{Binding distance, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="55"/>
+
+                        <!-- 移動方法（オートコンプリート） -->
+                        <DataGridTemplateColumn Header="移動方法" Width="80">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <ctrl:AutoCompleteTextBox
+                                        Text="{Binding transport,
+                                               UpdateSourceTrigger=PropertyChanged,
+                                               Mode=TwoWay}"
+                                        ItemsSource="{Binding ElementName=this_dialog,
+                                                              Path=transport_list}"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- 備考 -->
+                        <DataGridTextColumn Header="備考"
+                                            Binding="{Binding note, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="120"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+
+        <!-- ===== 4段目：保存・キャンセル ===== -->
+        <StackPanel Grid.Row="4"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,15,0,0">
+            <Button x:Name="btn_cancel"
+                    Content="キャンセル"
+                    Padding="20,8"
+                    Background="{StaticResource brush_bg_card}"
+                    BorderBrush="{StaticResource brush_border}"
+                    BorderThickness="1"
+                    FontSize="13"
+                    Cursor="Hand"
+                    Click="btn_cancel_Click"/>
+            <Button x:Name="btn_save"
+                    Content="💾 保存"
+                    Style="{StaticResource style_button_primary}"
+                    Margin="10,0,0,0"
+                    Click="btn_save_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

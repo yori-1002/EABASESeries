@@ -1,0 +1,70 @@
+﻿<UserControl x:Class="EA_DailyReport.Controls.AutoCompleteTextBox"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="24" d:DesignWidth="120">
+
+    <!--
+        オートコンプリート + スクロール選択 UserControl（v0.1.6 新設）
+        VBA UserForm の ComboBox 操作感を再現する
+        ・セルクリック → ポップアップで全候補表示
+        ・タイピング → インクリメンタル絞り込み（部分一致）
+        ・↑↓キー → 候補ハイライト移動
+        ・マウスホイール → 候補スクロール
+        ・Enter / クリック → 選択確定
+        ・Esc → ポップアップ閉じる
+        ・Tab → 次のセルへ移動
+    -->
+    <Grid>
+        <!--
+            入力 TextBox 本体
+            BorderThickness=0 にして DataGrid セル内でも違和感なく溶け込ませる
+            ※ ダイアログ単独利用時は外側で Border を被せる
+        -->
+        <TextBox x:Name="input_box"
+                 BorderThickness="0"
+                 Background="Transparent"
+                 Padding="4,2"
+                 VerticalContentAlignment="Center"
+                 TextChanged="input_box_TextChanged"
+                 PreviewKeyDown="input_box_PreviewKeyDown"
+                 GotFocus="input_box_GotFocus"
+                 LostFocus="input_box_LostFocus"/>
+
+        <!--
+            候補リストのポップアップ
+            StaysOpen=False でフォーカス外れたら自動で閉じる
+            AllowsTransparency=True にして角を丸くできる余地を残す
+            Placement=Bottom：TextBox の下に出す（VBA ComboBox と同じ）
+        -->
+        <Popup x:Name="suggest_popup"
+               PlacementTarget="{Binding ElementName=input_box}"
+               Placement="Bottom"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               PopupAnimation="Fade"
+               Focusable="False">
+            <Border Background="White"
+                    BorderBrush="#7F8C8D"
+                    BorderThickness="1"
+                    MinWidth="120"
+                    MaxWidth="400">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="8"
+                                      ShadowDepth="2"
+                                      Opacity="0.3"
+                                      Color="Black"/>
+                </Border.Effect>
+                <ListBox x:Name="suggest_list"
+                         MaxHeight="220"
+                         BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         MouseDoubleClick="suggest_list_MouseDoubleClick"
+                         PreviewMouseLeftButtonUp="suggest_list_PreviewMouseLeftButtonUp"/>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

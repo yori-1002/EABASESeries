@@ -1,0 +1,233 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ===== カラーパレット（v0.1.7 アイコン青基準・モダンSaaS寄り） =====
+         ▼ 修正：CostManager と同じキー名を維持し、色値だけ EA_DailyReport 用に変更
+         ▼ 段階3 で ThemeManager 経由の動的差し替えに対応する想定（CostManager 同等方式） -->
+    <Color x:Key="color_primary">#1E3A8A</Color>
+    <Color x:Key="color_primary_light">#2D4FB8</Color>
+    <Color x:Key="color_accent">#3F7DE0</Color>
+    <Color x:Key="color_accent_hover">#2563EB</Color>
+    <Color x:Key="color_success">#10B981</Color>
+    <Color x:Key="color_warning">#F59E0B</Color>
+    <Color x:Key="color_danger">#EF4444</Color>
+    <Color x:Key="color_bg_main">#F8FAFC</Color>
+    <Color x:Key="color_bg_card">#FFFFFF</Color>
+    <Color x:Key="color_text_primary">#1E293B</Color>
+    <Color x:Key="color_text_secondary">#64748B</Color>
+    <Color x:Key="color_border">#E2E8F0</Color>
+    <!-- ▼ 追加：v0.1.7 行ホバー・交互行色（DataGrid のソフト感調整） -->
+    <Color x:Key="color_row_alternate">#F8FAFC</Color>
+    <Color x:Key="color_row_hover">#EFF6FF</Color>
+
+    <SolidColorBrush x:Key="brush_primary" Color="{StaticResource color_primary}" />
+    <SolidColorBrush x:Key="brush_primary_light" Color="{StaticResource color_primary_light}" />
+    <SolidColorBrush x:Key="brush_accent" Color="{StaticResource color_accent}" />
+    <SolidColorBrush x:Key="brush_accent_hover" Color="{StaticResource color_accent_hover}" />
+    <SolidColorBrush x:Key="brush_success" Color="{StaticResource color_success}" />
+    <SolidColorBrush x:Key="brush_warning" Color="{StaticResource color_warning}" />
+    <SolidColorBrush x:Key="brush_danger" Color="{StaticResource color_danger}" />
+    <SolidColorBrush x:Key="brush_bg_main" Color="{StaticResource color_bg_main}" />
+    <SolidColorBrush x:Key="brush_bg_card" Color="{StaticResource color_bg_card}" />
+    <SolidColorBrush x:Key="brush_text_primary" Color="{StaticResource color_text_primary}" />
+    <SolidColorBrush x:Key="brush_text_secondary" Color="{StaticResource color_text_secondary}" />
+    <SolidColorBrush x:Key="brush_border" Color="{StaticResource color_border}" />
+    <!-- ▼▼▼ 追加：ナビゲーション選択色（ThemeManagerで各テーマに合わせて上書き） ▼▼▼ -->
+    <SolidColorBrush x:Key="brush_nav_selected" Color="{StaticResource color_accent}" />
+    <!-- ▼ 追加：v0.1.7 行ホバー・交互行用ブラシ -->
+    <SolidColorBrush x:Key="brush_row_alternate" Color="{StaticResource color_row_alternate}" />
+    <SolidColorBrush x:Key="brush_row_hover" Color="{StaticResource color_row_hover}" />
+
+    <!-- ===== サイドバーボタン ===== -->
+    <Style x:Key="style_sidebar_button" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="#BDC3C7" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="20,14" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border_bg"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border_bg" Property="Background"
+                                    Value="{StaticResource brush_primary_light}" />
+                            <Setter Property="Foreground" Value="White" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ▼ 追加：v0.1.7 サイドバー「クイック」ボタンスタイル
+         「📅 今月の日報」のような目立たせたいボタン用 -->
+    <Style x:Key="style_sidebar_quick_button" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource brush_accent}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="quick_border"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            CornerRadius="6">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="quick_border" Property="Background"
+                                    Value="{StaticResource brush_accent_hover}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===== 汎用ボタン ===== -->
+    <Style x:Key="style_button_primary" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource brush_accent}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="20,10" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="btn_border"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            CornerRadius="6">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="btn_border" Property="Background"
+                                    Value="{StaticResource brush_accent_hover}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="btn_border" Property="Opacity" Value="0.5" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===== カードパネル ===== -->
+    <Style x:Key="style_card" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource brush_bg_card}" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="20" />
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect BlurRadius="10" ShadowDepth="2"
+                                  Opacity="0.08" Color="Black" />
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===== ページタイトル ===== -->
+    <Style x:Key="style_page_title" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{StaticResource brush_text_primary}" />
+        <Setter Property="Margin" Value="0,0,0,20" />
+    </Style>
+
+    <!-- ===== DataGrid ===== -->
+    <!-- ▼ 修正：v0.1.7 ソフト感調整
+         ・行高さ 40 → 38
+         ・ヘッダーに紺背景 + 白文字（業務感維持）
+         ・交互行色 + ホバー色追加（モダンSaaS感） -->
+    <Style x:Key="style_datagrid" TargetType="DataGrid">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="GridLinesVisibility" Value="Horizontal" />
+        <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource brush_border}" />
+        <Setter Property="RowHeight" Value="38" />
+        <Setter Property="ColumnHeaderHeight" Value="44" />
+        <Setter Property="AutoGenerateColumns" Value="False" />
+        <Setter Property="CanUserAddRows" Value="False" />
+        <Setter Property="CanUserDeleteRows" Value="False" />
+        <Setter Property="SelectionMode" Value="Single" />
+        <Setter Property="IsReadOnly" Value="True" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="AlternatingRowBackground" Value="{StaticResource brush_row_alternate}" />
+        <!-- ▼ 追加：ヘッダースタイル（紺背景・白文字） -->
+        <Setter Property="ColumnHeaderStyle">
+            <Setter.Value>
+                <Style TargetType="DataGridColumnHeader">
+                    <Setter Property="Background" Value="{StaticResource brush_primary}" />
+                    <Setter Property="Foreground" Value="White" />
+                    <Setter Property="FontWeight" Value="SemiBold" />
+                    <Setter Property="FontSize" Value="12" />
+                    <Setter Property="Padding" Value="10,0" />
+                    <Setter Property="HorizontalContentAlignment" Value="Left" />
+                    <Setter Property="VerticalContentAlignment" Value="Center" />
+                    <Setter Property="BorderThickness" Value="0,0,1,0" />
+                    <Setter Property="BorderBrush" Value="{StaticResource brush_primary_light}" />
+                </Style>
+            </Setter.Value>
+        </Setter>
+        <!-- ▼ 追加：行ホバー・選択スタイル -->
+        <Setter Property="RowStyle">
+            <Setter.Value>
+                <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="{StaticResource brush_row_hover}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="{StaticResource brush_accent}" />
+                            <Setter Property="Foreground" Value="White" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ▼ 追加：v0.1.7 月度ツリー用 TreeView/TreeViewItem スタイル -->
+    <Style x:Key="style_month_tree" TargetType="TreeView">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="#BDC3C7" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <Style x:Key="style_month_tree_item" TargetType="TreeViewItem">
+        <Setter Property="Foreground" Value="#BDC3C7" />
+        <Setter Property="Padding" Value="4,3" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="White" />
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Foreground" Value="White" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+</ResourceDictionary>

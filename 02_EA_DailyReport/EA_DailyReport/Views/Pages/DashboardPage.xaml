@@ -1,0 +1,70 @@
+﻿<Page x:Class="EA_DailyReport.Views.Pages.DashboardPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      mc:Ignorable="d"
+      Title="ダッシュボード"
+      Background="{StaticResource brush_bg_main}">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <Grid Margin="30,30,30,30">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0"
+                       Text="ダッシュボード"
+                       Style="{StaticResource style_page_title}"/>
+
+            <!-- カード3列レイアウト（プレースホルダー） -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="20"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="20"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Column="0" Style="{StaticResource style_card}">
+                    <StackPanel>
+                        <TextBlock Text="📋 お知らせ"
+                                   FontSize="16" FontWeight="Bold"
+                                   Foreground="{StaticResource brush_text_primary}"
+                                   Margin="0,0,0,10"/>
+                        <TextBlock Text="Sprint 2 で実装予定です。"
+                                   Foreground="{StaticResource brush_text_secondary}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource style_card}">
+                    <StackPanel>
+                        <TextBlock Text="📊 操作履歴"
+                                   FontSize="16" FontWeight="Bold"
+                                   Foreground="{StaticResource brush_text_primary}"
+                                   Margin="0,0,0,10"/>
+                        <TextBlock Text="Sprint 2 で実装予定です。"
+                                   Foreground="{StaticResource brush_text_secondary}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="4" Style="{StaticResource style_card}">
+                    <StackPanel>
+                        <TextBlock Text="⚠️ 未入力者一覧"
+                                   FontSize="16" FontWeight="Bold"
+                                   Foreground="{StaticResource brush_text_primary}"
+                                   Margin="0,0,0,10"/>
+                        <TextBlock Text="Sprint 4 で実装予定です。"
+                                   Foreground="{StaticResource brush_text_secondary}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</Page>
