@@ -1,0 +1,121 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<!-- ビルド基本設定（必須） -->
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net10.0-windows</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UseWPF>true</UseWPF>
+
+		<!-- アイコン設定 -->
+		<ApplicationIcon>..\icon_set\icon_fix.ico</ApplicationIcon>
+
+		<!-- ▼ 修正：v1.0.1 メンテナンスリリース -->
+		<!--   v1.0.0 → v1.0.1 の主な変更：
+		         ・user_settings.json の保存先を %LOCALAPPDATA% に変更（保存エラー修正）
+		         ・ウィンドウ状態（最大化/通常サイズ・位置）の起動時復元・終了時保存
+		         ・DBインデックス9個の自動マイグレーション（業務テーブル高速化） -->
+		<!-- AssemblyVersion / FileVersion は4桁形式（X.X.X.X） -->
+		<!-- Version は SemVer 形式（NuGet等で参照される表示用バージョン） -->
+		<AssemblyVersion>1.0.2.0</AssemblyVersion>
+		<FileVersion>1.0.2.0</FileVersion>
+		<Version>1.0.2</Version>
+
+		<!-- ▼ 修正：エクスプローラのカーソルツールチップ表示用 -->
+		<!-- Product = 「CostManager」 → ツールチップに「CostManager Ver1.0.1」と表示される -->
+		<!-- AssemblyTitle = アセンブリの説明（プロパティ詳細タブ用） -->
+		<Product>CostManager</Product>
+		<AssemblyTitle>CostManager</AssemblyTitle>
+
+		<!-- ▼ 追加：会社名・著作権表記（プロパティ詳細タブで表示される） -->
+		<Company>EABASE Series</Company>
+		<Copyright>Copyright © EABASE Series 2026</Copyright>
+		<Description>EABASE Series CostManager</Description>
+
+		<!-- ▼ 修正：実行ファイル名を CostManager.exe に変更 -->
+		<!-- 旧：CostManager_Beta.v0.9.0.exe（Beta版の名残・バージョンを後ろ付けする旧運用） -->
+		<!-- 新：CostManager.exe（バージョン非依存・自動アップデートで上書き可能） -->
+		<AssemblyName>CostManager</AssemblyName>
+
+		<!-- ============================================================ -->
+		<!-- ▼ 追加 [v1.0.1] publish 時の出力を「exe + version.txt の2ファイル」に統一 -->
+		<!--
+		     【目的】
+		     dotnet publish の出力を完全に1ファイル化（CostManager.exe）し、
+		     リリース時のNAS配置・Inno Setupパッケージ化を簡素化する。
+
+		     【オプション解説】
+		     ・PublishSingleFile=true
+		         マネージドDLL（C#製）を exe に統合する。
+
+		     ・IncludeNativeLibrariesForSelfExtract=true
+		         ネイティブDLL（e_sqlite3.dll / wpfgfx_cor3.dll 等）も exe に内包する。
+		         このオプションがないと SQLite や WPF描画系のDLLが publish フォルダに残る。
+		         初回起動時のみ一時フォルダに展開されるため起動が数秒遅くなるが、
+		         2回目以降はキャッシュされるため通常起動。
+
+		     ・EnableCompressionInSingleFile=true
+		         exe 内部を圧縮し、ファイルサイズを約30%削減する。
+		         展開オーバーヘッドはあるが起動速度への影響は軽微。
+
+		     【リリース時のコマンド（PowerShell）】
+		     これらが csproj に書かれているため、コマンド側で個別指定不要。
+		     dotnet publish (構成・ランタイム・self-contained・出力先 を指定)
+		     例：dotnet publish -c Release -r win-x64 (self-contained と -o publish を併記)
+
+		     【publish 後の出力】
+		     publish\CostManager.exe        ← 全DLL内包・自己完結シングルファイル
+		     publish\01_version.txt         ← csproj の <Version> から自動生成
+
+		     【注意】
+		     これらは publish 時のみ有効で、dotnet build（通常ビルド）には影響しない。
+		-->
+		<PublishSingleFile>true</PublishSingleFile>
+		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+		<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+		<PackageReference Include="Dapper" Version="2.1.35" />
+		<PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
+		<PackageReference Include="ClosedXML" Version="0.102.3" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="..\icon_set\icon_fix.ico">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+	<!-- ============================================================ -->
+	<!-- ▼ v1.0.0 追加：publish 後に 01_version.txt を自動生成 -->
+	<!--
+	     【目的】
+	     NASに配置する 01_version.txt（自動アップデート機構が参照する）の
+	     バージョン番号を、csproj の <Version> から自動生成する。
+	     手書き更新によるバージョン記入ミスを防止する。
+
+	     【動作】
+	     dotnet publish 完了後（AfterTargets="Publish"）に
+	     publish フォルダ直下に 01_version.txt を生成する。
+	     ファイルの中身は <Version> の値そのまま（例：1.0.1）。
+
+	     【リリース時の運用】
+	     publish\EA_CostManager.exe ではなく、
+	     installer_output\EA_CostManager_setup_vX.X.X.exe を NAS にコピーする。
+	     その際に publish\01_version.txt も同じNASフォルダにコピーする。
+	     （exe と version.txt の両方をNASに置く）
+
+	     【書き出し設定】
+	     ・Encoding: UTF-8（BOMなし） ※自動アップデート機構が読める形式
+	     ・改行: 末尾に追加されない（バージョン文字列のみ1行）
+	     ・上書き: 既存ファイルがあれば上書き
+	-->
+	<Target Name="GenerateVersionTxt" AfterTargets="Publish">
+		<WriteLinesToFile File="$(PublishDir)01_version.txt" Lines="$(Version)" Overwrite="true" Encoding="UTF-8" />
+		<Message Text="✅ version.txt を生成しました：$(PublishDir)01_version.txt（バージョン：$(Version)）" Importance="high" />
+	</Target>
+
+</Project>

@@ -1,0 +1,179 @@
+<Window x:Class="EA_CostManager.Views.ProjectRatesDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="人員単価の変更"
+        Width="520" Height="560"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <Style x:Key="label_style" TargetType="TextBlock">
+            <Setter Property="FontSize"   Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#333"/>
+            <Setter Property="Margin"     Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="note_style" TargetType="TextBlock">
+            <Setter Property="FontSize"   Value="10"/>
+            <Setter Property="Foreground" Value="#888"/>
+            <Setter Property="Margin"     Value="0,2,0,8"/>
+        </Style>
+        <Style x:Key="btn_primary" TargetType="Button">
+            <Setter Property="Background"      Value="#2E75B6"/>
+            <Setter Property="Foreground"      Value="White"/>
+            <Setter Property="FontSize"        Value="12"/>
+            <Setter Property="Padding"         Value="12,6"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Margin"          Value="0,0,8,0"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ヘッダー -->
+        <Border Grid.Row="0" Background="#EEF4FB" Padding="12,8"
+                CornerRadius="4" Margin="0,0,0,16">
+            <StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <TextBlock Text="現場：" FontWeight="Bold" FontSize="12"/>
+                    <TextBlock x:Name="txt_project_name" FontSize="12"
+                               Foreground="#2E75B6" FontWeight="Bold"/>
+                </StackPanel>
+                <TextBlock FontSize="11" Foreground="#555"
+                           Text="この現場専用の単価を設定します。空欄はデフォルト（金額設定の値）を使用します。"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <!-- 技師単価 -->
+                <Border Background="#F8F8FF" CornerRadius="4" Padding="12,10"
+                        BorderBrush="#C8C8F0" BorderThickness="1" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="技師 日額単価" Style="{StaticResource label_style}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="txt_engineer_rate" Grid.Column="0"
+                                     FontSize="13" Padding="8,6"
+                                     BorderBrush="#CCCCCC"/>
+                            <TextBlock Grid.Column="1" Text="円/日"
+                                       FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
+                            <TextBlock Grid.Column="2" x:Name="txt_engineer_default"
+                                       FontSize="10" Foreground="#888"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock Text="空欄 = デフォルト単価を使用" Style="{StaticResource note_style}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 助手単価 -->
+                <Border Background="#F8FFF8" CornerRadius="4" Padding="12,10"
+                        BorderBrush="#C8EEC8" BorderThickness="1" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="助手 日額単価" Style="{StaticResource label_style}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="txt_assistant_rate" Grid.Column="0"
+                                     FontSize="13" Padding="8,6"
+                                     BorderBrush="#CCCCCC"/>
+                            <TextBlock Grid.Column="1" Text="円/日"
+                                       FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
+                            <TextBlock Grid.Column="2" x:Name="txt_assistant_default"
+                                       FontSize="10" Foreground="#888"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock Text="空欄 = デフォルト単価を使用" Style="{StaticResource note_style}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 個人別単価 -->
+                <Border Background="#FFFFF8" CornerRadius="4" Padding="12,10"
+                        BorderBrush="#E8E8C0" BorderThickness="1" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="個人別単価（任意）" Style="{StaticResource label_style}"/>
+                        <TextBlock Text="特定の社員にのみ異なる単価を設定できます"
+                                   Style="{StaticResource note_style}"/>
+
+                        <!-- 個人別単価リスト -->
+                        <DataGrid x:Name="grid_individual"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="True"
+                                  CanUserDeleteRows="True"
+                                  CanUserReorderColumns="False"
+                                  GridLinesVisibility="Horizontal"
+                                  HorizontalGridLinesBrush="#DDDDCC"
+                                  HeadersVisibility="Column"
+                                  RowHeight="32" FontSize="12"
+                                  BorderThickness="1" BorderBrush="#DDDDCC"
+                                  Margin="0,0,0,4"
+                                  MinHeight="80" MaxHeight="150">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="氏名"
+                                    Binding="{Binding employee_name, UpdateSourceTrigger=PropertyChanged}"
+                                    Width="*"/>
+                                <DataGridTextColumn Header="日額単価（円）"
+                                    Binding="{Binding daily_rate, UpdateSourceTrigger=PropertyChanged}"
+                                    Width="130"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <TextBlock Text="行を追加：最下行をクリックして入力してください"
+                                   FontSize="10" Foreground="#888"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- エラーテキスト -->
+                <TextBlock x:Name="txt_error" Foreground="Red" FontSize="11"
+                           Visibility="Collapsed" Margin="0,0,0,8"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ボタン -->
+        <Grid Grid.Row="2" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- リセット系ボタン（左側に並べる） -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button x:Name="btn_reset_default"
+                        Content="↺ 全タブリセット"
+                        Background="#E74C3C" Foreground="White"
+                        FontSize="12" Padding="12,6" BorderThickness="0"
+                        Cursor="Hand" Margin="0,0,8,0"
+                        Click="btn_reset_Click"/>
+                <Button x:Name="btn_reset_current"
+                        Content="↺ このタブのみリセット"
+                        Background="#E67E22" Foreground="White"
+                        FontSize="12" Padding="12,6" BorderThickness="0"
+                        Cursor="Hand"
+                        Click="btn_reset_current_Click"/>
+            </StackPanel>
+
+            <!-- キャンセル・保存 -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Content="キャンセル" Width="90" Padding="0,7"
+                        Margin="0,0,8,0" Click="btn_cancel_Click"/>
+                <Button Content="保存" Width="80" Padding="0,7"
+                        Style="{StaticResource btn_primary}"
+                        Margin="0" Click="btn_save_Click"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

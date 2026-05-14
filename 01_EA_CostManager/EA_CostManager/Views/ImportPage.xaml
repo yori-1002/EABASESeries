@@ -1,0 +1,180 @@
+<UserControl x:Class="EA_CostManager.Views.ImportPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:EA_CostManager.ViewModels">
+
+    <Grid Margin="32">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*"    />
+            <!-- ▼▼▼ 修正：プログレスバー専用行を追加 ▼▼▼ -->
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- タイトル -->
+        <TextBlock Grid.Row="0"
+                   Text="日報取込"
+                   Style="{StaticResource style_page_title}" />
+
+        <!-- ファイル選択エリア -->
+        <Border Grid.Row="1"
+                Style="{StaticResource style_card}"
+                Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- ファイル名表示 -->
+                <Border Grid.Column="0"
+                        Background="{StaticResource brush_bg_main}"
+                        CornerRadius="4"
+                        Padding="12,8"
+                        Margin="0,0,12,0">
+                    <TextBlock Text="{Binding file_name_display}"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource brush_text_secondary}" />
+                </Border>
+
+                <!-- ファイル選択ボタン -->
+                <Button Grid.Column="1"
+                        Content="ファイルを選択"
+                        Command="{Binding select_file_command}"
+                        Style="{StaticResource style_button_primary}"
+                        Margin="0,0,8,0" />
+
+                <!-- プレビューボタン -->
+                <Button Grid.Column="2"
+                        Content="プレビュー確認"
+                        Command="{Binding preview_command}"
+                        Style="{StaticResource style_button_primary}"
+                        Opacity="0.75" />
+            </Grid>
+        </Border>
+
+        <!-- 件数・期間サマリー -->
+        <Border Grid.Row="2"
+                Background="#EBF5FB"
+                CornerRadius="6"
+                Padding="16,10"
+                Margin="0,0,0,16"
+                Visibility="{Binding has_preview, Converter={StaticResource bool_to_vis}}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="📄 読込件数：" Foreground="{StaticResource brush_text_primary}" />
+                <TextBlock Text="{Binding preview_count}" FontWeight="Bold"
+                           Foreground="{StaticResource brush_accent}" />
+                <TextBlock Text=" 件　" Foreground="{StaticResource brush_text_primary}" />
+                <TextBlock Text="📅 期間：" Foreground="{StaticResource brush_text_primary}" />
+                <TextBlock Text="{Binding preview_date_range}" FontWeight="Bold"
+                           Foreground="{StaticResource brush_accent}" />
+            </StackPanel>
+        </Border>
+
+        <!-- プレビューDataGrid -->
+        <Border Grid.Row="3"
+                Style="{StaticResource style_card}"
+                Padding="4"
+                Margin="0,0,0,16">
+            <DataGrid Style="{StaticResource style_datagrid}"
+                      ItemsSource="{Binding preview_rows}"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      EnableRowVirtualization="True">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="日付"
+                        Binding="{Binding work_date, StringFormat=yyyy/MM/dd}" Width="100" />
+                    <DataGridTextColumn Header="氏名"
+                        Binding="{Binding employee_name}" Width="90" />
+                    <DataGridTextColumn Header="職種"
+                        Binding="{Binding job_type}" Width="80" />
+                    <DataGridTextColumn Header="区分"
+                        Binding="{Binding category_code}" Width="80" />
+                    <DataGridTextColumn Header="業務名"
+                        Binding="{Binding project_name}" Width="160" />
+                    <DataGridTextColumn Header="詳細"
+                        Binding="{Binding detail}" Width="200" />
+                    <DataGridTextColumn Header="時間(h)"
+                        Binding="{Binding hours, StringFormat=0.0}" Width="70" />
+                    <DataGridTextColumn Header="出勤"
+                        Binding="{Binding clock_in}" Width="65" />
+                    <DataGridTextColumn Header="退勤"
+                        Binding="{Binding clock_out}" Width="65" />
+                    <DataGridTextColumn Header="機材名"
+                        Binding="{Binding equipment_name}" Width="120" />
+                    <DataGridTextColumn Header="損料(円)"
+                        Binding="{Binding equipment_rate, StringFormat=N0}" Width="80" />
+                    <DataGridTextColumn Header="車両"
+                        Binding="{Binding vehicle}" Width="70" />
+                    <DataGridTextColumn Header="発"
+                        Binding="{Binding departure}" Width="100" />
+                    <DataGridTextColumn Header="着"
+                        Binding="{Binding arrival}" Width="100" />
+                    <DataGridTextColumn Header="距離(km)"
+                        Binding="{Binding distance, StringFormat=0.0}" Width="80" />
+                    <DataGridTextColumn Header="移動方法"
+                        Binding="{Binding travel_method}" Width="80" />
+                    <DataGridTextColumn Header="備考"
+                        Binding="{Binding remarks}" Width="150" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <!-- ▼▼▼ 修正：プログレスバーをDataGrid直下の専用行に配置 ▼▼▼ -->
+        <ProgressBar Grid.Row="4"
+                     IsIndeterminate="True"
+                     Height="4"
+                     Margin="0,4,0,4"
+                     Foreground="{StaticResource brush_accent}"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Visibility="{Binding is_busy, Converter={StaticResource bool_to_vis}}"/>
+
+        <!-- 進捗メッセージ -->
+        <TextBlock Grid.Row="5"
+                   Text="{Binding progress_message}"
+                   Foreground="{StaticResource brush_text_secondary}"
+                   Margin="0,0,0,4" />
+
+        <!-- 取込ボタン・結果エリア -->
+        <Grid Grid.Row="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 結果メッセージ -->
+            <TextBlock Grid.Column="0"
+                       Text="{Binding result_message}"
+                       VerticalAlignment="Center"
+                       FontWeight="SemiBold">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding is_result_success}" Value="True">
+                                <Setter Property="Foreground"
+                                        Value="{StaticResource brush_success}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding is_result_success}" Value="False">
+                                <Setter Property="Foreground"
+                                        Value="{StaticResource brush_danger}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
+            <!-- 取込実行ボタン -->
+            <Button Grid.Column="1"
+                    Content="取込実行"
+                    Command="{Binding import_command}"
+                    Style="{StaticResource style_button_primary}"
+                    Width="120" Cursor="" />
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,0 +1,266 @@
+<Window x:Class="EA_CostManager.Views.PrintOptionsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="印刷設定"
+        Width="1280" Height="760"
+        MinWidth="900" MinHeight="600"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize">
+
+    <Window.Resources>
+        <Style TargetType="RadioButton">
+            <Setter Property="Margin" Value="0,5,0,5"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style TargetType="GroupBox">
+            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="Padding" Value="12,8,12,12"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="370" MinWidth="320"/>
+            <ColumnDefinition Width="4"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ======== 左パネル：印刷設定 ======== -->
+        <Border Grid.Column="0" Background="#F7FAFD"
+                BorderBrush="#CCDDEE" BorderThickness="0,0,1,0">
+            <DockPanel Margin="16">
+
+                <!-- 下部ボタン -->
+                <Border DockPanel.Dock="Bottom" Padding="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock x:Name="txt_info" FontSize="11"
+                                   Foreground="#555" TextWrapping="Wrap"
+                                   Margin="0,0,0,10"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button x:Name="btn_cancel" Content="キャンセル"
+                                    Width="90" Height="32" Margin="0,0,8,0"
+                                    Click="btn_cancel_Click"/>
+                            <Button x:Name="btn_print" Content="🖨 印刷"
+                                    Width="100" Height="32"
+                                    Background="#27AE60" Foreground="White"
+                                    Click="btn_print_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- 設定オプション -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+
+                        <!-- 印刷対象 -->
+                        <GroupBox Header="印刷対象">
+                            <StackPanel>
+                                <!-- ▼▼▼ [Sprint 5G] チェックボックス方式に変更（Excelと統一） ▼▼▼ -->
+                                <TextBlock Text="印刷するタブを選択してください"
+                                           FontSize="11" Foreground="#666" Margin="0,0,0,4"/>
+                                <Border x:Name="border_tab_list"
+                                        Margin="2,2,0,2">
+                                    <ListBox x:Name="list_filter_tabs"
+                                             MaxHeight="180"
+                                             BorderThickness="1" BorderBrush="#CCDDEE"
+                                             CheckBox.Checked="option_Changed"
+                                             CheckBox.Unchecked="option_Changed">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <CheckBox Content="{Binding tab_name}"
+                                                          IsChecked="{Binding is_checked, Mode=TwoWay}"
+                                                          Margin="2,3" FontSize="12"
+                                                          FontWeight="Normal"/>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Padding" Value="2"/>
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                    </ListBox>
+                                </Border>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- 期間指定 -->
+                        <GroupBox Header="期間指定（任意）">
+                            <StackPanel>
+                                <CheckBox x:Name="chk_period"
+                                          Content="期間を指定する"
+                                          Margin="0,5,0,5" FontSize="13"
+                                          Checked="option_Changed"
+                                          Unchecked="option_Changed"/>
+
+                                <Grid x:Name="grid_period"
+                                      Margin="18,6,0,0" Visibility="Collapsed">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="8"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="55"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0"
+                                               Text="開始日" VerticalAlignment="Center"
+                                               FontSize="12" FontWeight="Normal"/>
+                                    <DatePicker x:Name="dp_from"
+                                                Grid.Row="0" Grid.Column="1"
+                                                FontSize="12"
+                                                SelectedDateChanged="option_Changed"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0"
+                                               Text="終了日" VerticalAlignment="Center"
+                                               FontSize="12" FontWeight="Normal"/>
+                                    <DatePicker x:Name="dp_to"
+                                                Grid.Row="2" Grid.Column="1"
+                                                FontSize="12"
+                                                SelectedDateChanged="option_Changed"/>
+                                </Grid>
+
+                                <TextBlock x:Name="txt_period_error"
+                                           Foreground="Red" FontSize="11"
+                                           Margin="0,4,0,0" Visibility="Collapsed"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- ▼▼▼ [Sprint 5G] 出力列の選択 ▼▼▼ -->
+                        <GroupBox Header="出力列の選択">
+                            <StackPanel>
+                                <TextBlock Text="固定列：作業日・作業内容・合計金額（常に出力）"
+                                           FontSize="10" Foreground="#888" Margin="0,2,0,6"/>
+                                <!-- 技師 -->
+                                <TextBlock Text="■ 技師" FontSize="12" FontWeight="Bold" Margin="0,0,0,2"/>
+                                <WrapPanel>
+                                    <CheckBox x:Name="chk_eng_name" Content="技師氏名"    IsChecked="True" Margin="0,0,10,3" FontSize="12" Checked="option_Changed" Unchecked="option_Changed"/>
+                                    <CheckBox x:Name="chk_eng_day"  Content="人工(日)"    IsChecked="True" Margin="0,0,10,3" FontSize="12" Checked="option_Changed" Unchecked="option_Changed"/>
+                                    <CheckBox x:Name="chk_eng_cost" Content="人件費"      IsChecked="True" Margin="0,0,10,3" FontSize="12" Checked="option_Changed" Unchecked="option_Changed"/>
+                                </WrapPanel>
+                                <!-- 助手 -->
+                                <TextBlock Text="■ 助手" FontSize="12" FontWeight="Bold" Margin="0,4,0,2"/>
+                                <WrapPanel>
+                                    <CheckBox x:Name="chk_ast_name" Content="助手氏名"    IsChecked="True" Margin="0,0,10,3" FontSize="12" Checked="option_Changed" Unchecked="option_Changed"/>
+                                    <CheckBox x:Name="chk_ast_day"  Content="人工(日)"    IsChecked="True" Margin="0,0,10,3" FontSize="12" Checked="option_Changed" Unchecked="option_Changed"/>
+                                    <CheckBox x:Name="chk_ast_cost" Content="人件費"      IsChecked="True" Margin="0,0,10,3" FontSize="12" Checked="option_Changed" Unchecked="option_Changed"/>
+                                </WrapPanel>
+                                <!-- 集計 -->
+                                <TextBlock Text="■ 集計" FontSize="12" FontWeight="Bold" Margin="0,4,0,2"/>
+                                <WrapPanel>
+                                    <CheckBox x:Name="chk_personnel"  Content="人件費合計"  IsChecked="True" Margin="0,0,10,3" FontSize="12" Checked="option_Changed" Unchecked="option_Changed"/>
+                                </WrapPanel>
+                                <!-- 交通費・損料 -->
+                                <TextBlock Text="■ 交通費・損料" FontSize="12" FontWeight="Bold" Margin="0,4,0,2"/>
+                                <WrapPanel>
+                                    <CheckBox x:Name="chk_transport"  Content="交通費"      IsChecked="True" Margin="0,0,10,3" FontSize="12" Checked="option_Changed" Unchecked="option_Changed"/>
+                                    <CheckBox x:Name="chk_equipment"  Content="損料"        IsChecked="True" Margin="0,0,10,3" FontSize="12" Checked="option_Changed" Unchecked="option_Changed"/>
+                                    <CheckBox x:Name="chk_equip_name" Content="機材・使用者" IsChecked="True" Margin="0,0,10,3" FontSize="12" Checked="option_Changed" Unchecked="option_Changed"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- ★v0.9.7追加：ヘッダー情報の表示オプション -->
+                        <!-- お客様向けはOFF、社内用はONで条件・カスタム単価を印刷物に記載 -->
+                        <GroupBox Header="ヘッダー情報（任意）">
+                            <StackPanel>
+                                <TextBlock Text="印刷物の上部に記載する情報を選択できます。"
+                                           FontSize="10" Foreground="#666"
+                                           Margin="0,0,0,6" TextWrapping="Wrap"/>
+                                <CheckBox x:Name="chk_show_filter_info"
+                                          Content="絞り込み条件を表示する（月度・キーワード・氏名・期間）"
+                                          FontSize="11"
+                                          Margin="0,2,0,2"
+                                          Checked="option_Changed" Unchecked="option_Changed"/>
+                                <CheckBox x:Name="chk_show_custom_rate"
+                                          Content="カスタム単価が適用されている旨を表示する"
+                                          FontSize="11"
+                                          Margin="0,2,0,2"
+                                          Checked="option_Changed" Unchecked="option_Changed"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- 区切り線（ドラッグで幅調整可能） -->
+        <GridSplitter Grid.Column="1"
+                      Width="4" HorizontalAlignment="Stretch"
+                      Background="#CCDDEE" Cursor="SizeWE"/>
+
+        <!-- ======== 右パネル：常時プレビュー ======== -->
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <!-- ▼▼▼ 追加：カスタムナビゲーションバー ▼▼▼ -->
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- プレビューヘッダー -->
+            <Border Grid.Row="0" Background="#2E75B6" Padding="12,6">
+                <TextBlock Text="印刷プレビュー（オプション変更で自動更新）"
+                           Foreground="White" FontSize="12" FontWeight="SemiBold"/>
+            </Border>
+
+            <!-- ▼▼▼ 追加：カスタムナビゲーションバー ▼▼▼ -->
+            <!-- FlowDocumentReader組み込みツールバーは小さくて使いにくいため、独自のナビゲーションを追加 -->
+            <Border Grid.Row="1" Background="#3A4A5A" Padding="10,5">
+                <DockPanel>
+                    <!-- 右：ズームコントロール -->
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <Button x:Name="btn_zoom_out" Content=" − "
+                                Width="32" Height="28" FontSize="14"
+                                Background="#4A5A6A" Foreground="White"
+                                BorderThickness="0"
+                                Click="btn_zoom_out_Click" Cursor="Hand"/>
+                        <TextBlock x:Name="txt_zoom" Text="65%"
+                                   Width="48" TextAlignment="Center"
+                                   FontSize="13" Foreground="White"
+                                   FontWeight="Bold" VerticalAlignment="Center"/>
+                        <Button x:Name="btn_zoom_in" Content=" ＋ "
+                                Width="32" Height="28" FontSize="14"
+                                Background="#4A5A6A" Foreground="White"
+                                BorderThickness="0"
+                                Click="btn_zoom_in_Click" Cursor="Hand"/>
+                    </StackPanel>
+
+                    <!-- 中央：ページナビゲーション -->
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Button x:Name="btn_prev_page" Content="◀ 前"
+                                Width="58" Height="28" FontSize="12"
+                                Background="#4A5A6A" Foreground="White"
+                                BorderThickness="0" Margin="0,0,6,0"
+                                Click="btn_prev_page_Click" Cursor="Hand"/>
+                        <TextBlock x:Name="txt_page_info" Text=""
+                                   MinWidth="80" TextAlignment="Center"
+                                   FontSize="14" FontWeight="Bold"
+                                   Foreground="White" VerticalAlignment="Center"/>
+                        <Button x:Name="btn_next_page" Content="次 ▶"
+                                Width="58" Height="28" FontSize="12"
+                                Background="#4A5A6A" Foreground="White"
+                                BorderThickness="0" Margin="6,0,0,0"
+                                Click="btn_next_page_Click" Cursor="Hand"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- FlowDocumentReader -->
+            <FlowDocumentReader x:Name="doc_reader"
+                                Grid.Row="2"
+                                ViewingMode="Page"
+                                Zoom="65"
+                                Background="#777"/>
+        </Grid>
+
+    </Grid>
+</Window>

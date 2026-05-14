@@ -1,0 +1,18 @@
+<UserControl x:Class="EA_CostManager.Views.PlaceholderPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{StaticResource brush_bg_main}">
+    <Grid Margin="32">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock x:Name="txt_title" Text="準備中"
+                       FontSize="28" FontWeight="Bold"
+                       Foreground="{StaticResource brush_text_primary}"
+                       HorizontalAlignment="Center" Margin="0,0,0,12" />
+            <TextBlock x:Name="txt_description"
+                       Text="この画面は次のSprintで実装されます"
+                       FontSize="14"
+                       Foreground="{StaticResource brush_text_secondary}"
+                       HorizontalAlignment="Center" />
+        </StackPanel>
+    </Grid>
+</UserControl>

@@ -1,0 +1,1853 @@
+<UserControl x:Class="EA_CostManager.Views.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:EA_CostManager.Converters"
+             xmlns:vm="clr-namespace:EA_CostManager.ViewModels">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <!-- int値とパラメータが一致するかをboolで返すConverter（RadioButton用） -->
+        <conv:IntEqualConverter x:Key="IntEqual"/>
+        <!-- string値とパラメータが一致するかをboolで返すConverter（RadioButton用） -->
+        <conv:StringEqualConverter x:Key="StrEqual"/>
+
+        <!-- ===== 共通スタイル ===== -->
+
+        <!-- セクション見出し -->
+        <Style x:Key="section_header" TargetType="TextBlock">
+            <Setter Property="FontSize"   Value="15"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{DynamicResource brush_accent}"/>
+            <Setter Property="Margin"     Value="0,0,0,12"/>
+        </Style>
+
+        <!-- ステータスラベル -->
+        <Style x:Key="status_label" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin"   Value="0,8,0,0"/>
+        </Style>
+
+        <!-- アクションボタン（青） -->
+        <Style x:Key="btn_primary" TargetType="Button">
+            <Setter Property="Background"  Value="{DynamicResource brush_accent}"/>
+            <Setter Property="Foreground"  Value="White"/>
+            <Setter Property="FontSize"    Value="12"/>
+            <Setter Property="Padding"     Value="14,6"/>
+            <Setter Property="Margin"      Value="0,0,8,0"/>
+            <Setter Property="Cursor"      Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <!-- アクションボタン（緑・保存系） -->
+        <Style x:Key="btn_success" TargetType="Button">
+            <Setter Property="Background"  Value="#27AE60"/>
+            <Setter Property="Foreground"  Value="White"/>
+            <Setter Property="FontSize"    Value="12"/>
+            <Setter Property="FontWeight"  Value="Bold"/>
+            <Setter Property="Padding"     Value="14,6"/>
+            <Setter Property="Margin"      Value="0,0,8,0"/>
+            <Setter Property="Cursor"      Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <!-- アクションボタン（赤・削除系） -->
+        <Style x:Key="btn_danger" TargetType="Button">
+            <Setter Property="Background"  Value="#C0392B"/>
+            <Setter Property="Foreground"  Value="White"/>
+            <Setter Property="FontSize"    Value="12"/>
+            <Setter Property="Padding"     Value="10,4"/>
+            <Setter Property="Cursor"      Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <!-- アクションボタン（オレンジ・復元系） -->
+        <Style x:Key="btn_warn" TargetType="Button">
+            <Setter Property="Background"  Value="#E67E22"/>
+            <Setter Property="Foreground"  Value="White"/>
+            <Setter Property="FontSize"    Value="12"/>
+            <Setter Property="Padding"     Value="10,4"/>
+            <Setter Property="Cursor"      Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <!-- DataGrid 共通 -->
+        <Style x:Key="master_grid" TargetType="DataGrid">
+            <Setter Property="AutoGenerateColumns"       Value="False"/>
+            <Setter Property="CanUserAddRows"            Value="False"/>
+            <Setter Property="CanUserDeleteRows"         Value="False"/>
+            <Setter Property="CanUserReorderColumns"     Value="False"/>
+            <Setter Property="SelectionMode"             Value="Single"/>
+            <Setter Property="GridLinesVisibility"       Value="Horizontal"/>
+            <Setter Property="HorizontalGridLinesBrush"  Value="#DDDDDD"/>
+            <Setter Property="HeadersVisibility"         Value="Column"/>
+            <Setter Property="RowHeight"                 Value="32"/>
+            <Setter Property="FontSize"                  Value="12"/>
+            <Setter Property="BorderThickness"           Value="1"/>
+            <Setter Property="BorderBrush"               Value="#CCCCCC"/>
+        </Style>
+
+        <!-- ===== 右コンテンツ DataTemplate ===== -->
+
+        <!-- 人員マスタ -->
+        <DataTemplate DataType="{x:Type vm:master_employees_view_model}">
+            <Grid Margin="24,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="人員マスタ" Style="{StaticResource section_header}"/>
+
+                <!-- ツールバー -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+                    <Button Content="＋ 追加" Command="{Binding add_command}"
+                            Style="{StaticResource btn_primary}"/>
+                    <Button Content="💾 保存" Command="{Binding save_command}"
+                            Style="{StaticResource btn_success}"/>
+                    <Button Content="↺ デフォルトに戻す" Command="{Binding reset_to_default_command}"
+                            Background="#5D6D7E" Foreground="White" FontSize="12"
+                            Padding="14,6" Cursor="Hand" BorderThickness="0"/>
+                </StackPanel>
+
+                <!-- 一覧グリッド -->
+                <DataGrid Grid.Row="2" ItemsSource="{Binding employees}"
+                          SelectedItem="{Binding selected_row}"
+                          Style="{StaticResource master_grid}">
+                    <DataGrid.RowStyle>
+                        <Style TargetType="DataGridRow">
+                            <Setter Property="Background" Value="White"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding job_type}" Value="技師">
+                                    <Setter Property="Background" Value="#DDEEFF"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.RowStyle>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="氏名" Binding="{Binding employee_name, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
+                        <DataGridTemplateColumn Header="職種" Width="160">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding job_type}" VerticalAlignment="Center" Margin="4,0"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                            <DataGridTemplateColumn.CellEditingTemplate>
+                                <DataTemplate>
+                                    <ComboBox SelectedItem="{Binding job_type, UpdateSourceTrigger=PropertyChanged}"
+                                              ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=DataContext.job_type_options}"
+                                              IsEditable="False"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellEditingTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="日額単価(円)" Binding="{Binding daily_rate, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
+                        <!-- 残りのスペースを埋めるダミーカラム -->
+                        <DataGridTextColumn Width="*" IsReadOnly="True"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TextBlock Grid.Row="3" Text="{Binding status}" Style="{StaticResource status_label}"/>
+            </Grid>
+        </DataTemplate>
+
+        <!-- 車両マスタ -->
+        <DataTemplate DataType="{x:Type vm:master_vehicles_view_model}">
+            <Grid Margin="24,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="車両マスタ" Style="{StaticResource section_header}"/>
+                <TextBlock Grid.Row="1" Text="※「なし」は日報入力の固定値として内部使用するため非表示です"
+                           FontSize="11" Foreground="#888" Margin="0,0,0,8"/>
+
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+                    <Button Content="＋ 追加" Command="{Binding add_command}" Style="{StaticResource btn_primary}"/>
+                    <Button Content="💾 保存" Command="{Binding save_command}" Style="{StaticResource btn_success}"/>
+                </StackPanel>
+
+                <DataGrid Grid.Row="3" ItemsSource="{Binding vehicles}"
+                          Style="{StaticResource master_grid}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="車両名" Binding="{Binding vehicle_name, UpdateSourceTrigger=PropertyChanged}" Width="200"/>
+                        <DataGridCheckBoxColumn Header="有効" Binding="{Binding is_active, UpdateSourceTrigger=PropertyChanged}" Width="60"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TextBlock Grid.Row="4" Text="{Binding status}" Style="{StaticResource status_label}"/>
+            </Grid>
+        </DataTemplate>
+
+        <!-- 機材マスタ -->
+        <DataTemplate DataType="{x:Type vm:master_equipment_view_model}">
+            <Grid Margin="24,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="機材マスタ（損料日額）" Style="{StaticResource section_header}"/>
+
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+                    <Button Content="＋ 追加" Command="{Binding add_command}" Style="{StaticResource btn_primary}"/>
+                    <Button Content="💾 保存" Command="{Binding save_command}" Style="{StaticResource btn_success}"/>
+                </StackPanel>
+
+                <DataGrid Grid.Row="2" ItemsSource="{Binding equipment_list}"
+                          SelectedItem="{Binding selected_row}"
+                          Style="{StaticResource master_grid}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="機材・ソフト名" Binding="{Binding equipment_name, UpdateSourceTrigger=PropertyChanged}" Width="160"/>
+                        <DataGridTextColumn Header="日額損料(円)"   Binding="{Binding daily_rate,     UpdateSourceTrigger=PropertyChanged}" Width="110"/>
+                        <DataGridCheckBoxColumn Header="有効"       Binding="{Binding is_active,      UpdateSourceTrigger=PropertyChanged}" Width="50"/>
+                        <DataGridTextColumn Header="備考"           Binding="{Binding note,           UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                        <DataGridTemplateColumn Header="操作" Width="70">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="削除"
+                                            Command="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=DataContext.delete_command}"
+                                            CommandParameter="{Binding}"
+                                            Style="{StaticResource btn_danger}"
+                                            Padding="6,2"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TextBlock Grid.Row="3" Text="{Binding status}" Style="{StaticResource status_label}"/>
+            </Grid>
+        </DataTemplate>
+
+        <!-- 旧形式氏名変換 -->
+        <DataTemplate DataType="{x:Type vm:master_legacy_name_view_model}">
+            <Grid Margin="24,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="旧形式氏名変換マスタ" Style="{StaticResource section_header}"/>
+                <TextBlock Grid.Row="1"
+                           Text="旧形式Excelに記載のフルネーム → 現行略称 の変換テーブルです。&#x0a;ベトナム人社員など、苗字のみ抽出できない社員のために使用します。"
+                           FontSize="11" Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                <!-- 追加フォーム -->
+                <Border Grid.Row="2" Background="#F0F4F8" CornerRadius="4" Padding="12,10"
+                        BorderThickness="1" BorderBrush="#CCDDF0" Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Text="新規追加" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource brush_accent}" Margin="0,0,0,8"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding new_legacy_name, UpdateSourceTrigger=PropertyChanged}"
+                                     FontSize="12" Padding="6,4">
+                                <TextBox.Style>
+                                    <Style TargetType="TextBox">
+                                        <Style.Triggers>
+                                            <Trigger Property="Text" Value="">
+                                                <Setter Property="Background">
+                                                    <Setter.Value>
+                                                        <VisualBrush Stretch="None" AlignmentX="Left">
+                                                            <VisualBrush.Visual>
+                                                                <TextBlock Text="旧形式フルネーム（例：NGUYEN VAN PHUC）" Foreground="Gray" Margin="8,4"/>
+                                                            </VisualBrush.Visual>
+                                                        </VisualBrush>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBox.Style>
+                            </TextBox>
+                            <TextBlock Grid.Column="1" Text="→" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="14"/>
+                            <TextBox Grid.Column="2"
+                                     Text="{Binding new_display_name, UpdateSourceTrigger=PropertyChanged}"
+                                     FontSize="12" Padding="6,4"
+                                     Tag="略称（例：フック）"/>
+                            <Button Grid.Column="4" Content="追加"
+                                    Command="{Binding add_command}"
+                                    Style="{StaticResource btn_primary}"
+                                    Margin="0"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- 一覧 -->
+                <DataGrid Grid.Row="3" ItemsSource="{Binding legacy_names}"
+                          IsReadOnly="True" Style="{StaticResource master_grid}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="旧形式フルネーム" Binding="{Binding legacy_name}"  Width="*"/>
+                        <DataGridTextColumn Header="変換後略称"       Binding="{Binding display_name}" Width="120"/>
+                        <DataGridTemplateColumn Header="操作" Width="70">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="削除"
+                                            Command="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=DataContext.delete_command}"
+                                            CommandParameter="{Binding}"
+                                            Style="{StaticResource btn_danger}"
+                                            Padding="6,2"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TextBlock Grid.Row="4" Text="{Binding status}" Style="{StaticResource status_label}"/>
+            </Grid>
+        </DataTemplate>
+
+        <!-- 金額設定 -->
+        <DataTemplate DataType="{x:Type vm:master_amount_view_model}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="24,20" MaxWidth="500">
+                    <TextBlock Text="金額設定" Style="{StaticResource section_header}"/>
+
+                    <!-- 人件費単価 -->
+                    <Border Background="#F0F4F8" CornerRadius="6" Padding="16,14"
+                            BorderThickness="1" BorderBrush="#CCDDF0" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="人件費単価" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource brush_accent}" Margin="0,0,0,12"/>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="測量技師 日額単価（円）" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding engineer_daily_rate, UpdateSourceTrigger=PropertyChanged}" FontSize="12" Padding="8,6"/>
+                                <TextBlock Grid.Column="2" Text="円/日" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="測量助手 日額単価（円）" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding assistant_daily_rate, UpdateSourceTrigger=PropertyChanged}" FontSize="12" Padding="8,6"/>
+                                <TextBlock Grid.Column="2" Text="円/日" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </Grid>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="1日基準時間" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding base_hours_per_day, UpdateSourceTrigger=PropertyChanged}" FontSize="12" Padding="8,6"/>
+                                <TextBlock Grid.Column="2" Text="h/日" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 交通費設定 -->
+                    <Border Background="#F0F4F8" CornerRadius="6" Padding="16,14"
+                            BorderThickness="1" BorderBrush="#CCDDF0" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="交通費設定" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource brush_accent}" Margin="0,0,0,12"/>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="下道 単価" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding road_cost_per_km, UpdateSourceTrigger=PropertyChanged}" FontSize="12" Padding="8,6"/>
+                                <TextBlock Grid.Column="2" Text="円/km" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="高速 単価" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding highway_cost_per_km, UpdateSourceTrigger=PropertyChanged}" FontSize="12" Padding="8,6"/>
+                                <TextBlock Grid.Column="2" Text="円/km" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </Grid>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="高速→下道 切替距離（往復）" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                <TextBox Grid.Column="1" Text="{Binding highway_distance_cap, UpdateSourceTrigger=PropertyChanged}" FontSize="12" Padding="8,6"/>
+                                <TextBlock Grid.Column="2" Text="km超" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="※ 保存後、次回の原価集計から新しい設定が反映されます"
+                               FontSize="11" Foreground="#E67E22" Margin="0,0,0,12"/>
+                    <Button Content="💾 金額設定を保存" Command="{Binding save_command}"
+                            Style="{StaticResource btn_success}"
+                            HorizontalAlignment="Left" Margin="0"/>
+                    <TextBlock Text="{Binding status}" Style="{StaticResource status_label}"/>
+                </StackPanel>
+            </ScrollViewer>
+        </DataTemplate>
+
+        <!-- アーカイブ済み現場 -->
+        <DataTemplate DataType="{x:Type vm:master_archived_projects_view_model}">
+            <Grid Margin="24,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="アーカイブ済み現場" Style="{StaticResource section_header}"/>
+                <TextBlock Grid.Row="1"
+                           Text="アーカイブした現場の一覧です。復元すると原価集計画面に再表示されます。&#x0a;完全削除は関連する原価データもすべて削除されます（元に戻せません）。"
+                           FontSize="11" Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                <DataGrid Grid.Row="2" ItemsSource="{Binding archived_projects}"
+                          SelectedItem="{Binding selected_row}"
+                          IsReadOnly="True" Style="{StaticResource master_grid}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="区分コード" Binding="{Binding category_code}" Width="110"/>
+                        <DataGridTextColumn Header="現場名"     Binding="{Binding site_name}"     Width="*"/>
+                        <DataGridTextColumn Header="詳細"       Binding="{Binding detail}"        Width="140"/>
+                        <DataGridTextColumn Header="属性"       Binding="{Binding attribute}"     Width="90"/>
+                        <DataGridTemplateColumn Header="操作" Width="160">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="復元"
+                                                Command="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=DataContext.restore_command}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource btn_primary}"
+                                                Padding="8,3" Margin="0,0,6,0"/>
+                                        <Button Content="完全削除"
+                                                Command="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=DataContext.delete_permanent_command}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource btn_danger}"
+                                                Padding="8,3"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TextBlock Grid.Row="3" Text="{Binding status}" Style="{StaticResource status_label}"/>
+            </Grid>
+        </DataTemplate>
+
+        <!-- ユーザー管理 -->
+        <DataTemplate DataType="{x:Type vm:user_management_view_model}">
+            <StackPanel Margin="24,20">
+                <TextBlock Text="ユーザー管理" Style="{StaticResource section_header}"/>
+
+                <!-- 管理者以外には警告表示 -->
+                <Border Background="#FFF3CD" CornerRadius="6" Padding="14,10"
+                        Margin="0,0,0,16" BorderThickness="1" BorderBrush="#FFEEBA">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding can_edit}" Value="False">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Text="⚠️ ユーザー権限の変更は管理者のみ操作できます。"
+                               FontSize="12" Foreground="#856404"/>
+                </Border>
+
+                <!-- ユーザー一覧 -->
+                <DataGrid ItemsSource="{Binding users}"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False" CanUserDeleteRows="False"
+                          IsReadOnly="False"
+                          GridLinesVisibility="Horizontal"
+                          HorizontalGridLinesBrush="#E0E6ED"
+                          RowHeight="40" ColumnHeaderHeight="40"
+                          Background="White"
+                          BorderThickness="1" BorderBrush="#E0E6ED"
+                          Margin="0,0,0,16">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="氏名"       Binding="{Binding user_name}"   Width="120" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="PC名"       Binding="{Binding pc_name}"     Width="150" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="現在の権限" Binding="{Binding role_label}"  Width="100" IsReadOnly="True"/>
+                        <DataGridTemplateColumn Header="変更後の権限" Width="130">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <ComboBox SelectedIndex="{Binding selected_role, UpdateSourceTrigger=PropertyChanged}"
+                                              FontSize="12" Margin="4,2">
+                                        <ComboBoxItem Content="閲覧"/>
+                                        <ComboBoxItem Content="一般"/>
+                                        <ComboBoxItem Content="管理者"/>
+                                    </ComboBox>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="登録日時" Binding="{Binding created_at}" Width="160" IsReadOnly="True"/>
+                        <DataGridTextColumn Width="*" IsReadOnly="True"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="💾 権限を保存"
+                            Command="{Binding save_command}"
+                            IsEnabled="{Binding can_edit}"
+                            Style="{StaticResource btn_success}"/>
+                </StackPanel>
+                <TextBlock Text="{Binding status}" Style="{StaticResource status_label}" Margin="0,8,0,0"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- ▼▼▼ 追加：タブ並び順リセット ▼▼▼ -->
+        <DataTemplate DataType="{x:Type vm:tab_sort_reset_view_model}">
+            <StackPanel Margin="24,20">
+                <TextBlock Text="タブ並び順リセット" Style="{StaticResource section_header}"/>
+                <TextBlock Text="大区分ごとに手動並び替えをリセットして、属性カラー順（デフォルト）に戻します。"
+                           FontSize="12" Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,20"/>
+                <ItemsControl ItemsSource="{Binding groups}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#F0F4F8" CornerRadius="6" Padding="16,14"
+                                    BorderThickness="1" BorderBrush="#CCDDF0" Margin="0,0,0,10">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="並び順をリセット"
+                                            Command="{Binding reset_command}"
+                                            Background="#C0392B" Foreground="White"
+                                            FontSize="12" Padding="12,6"
+                                            Cursor="Hand" BorderThickness="0"/>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding label}"
+                                                   FontWeight="Bold" FontSize="14"
+                                                   Foreground="{DynamicResource brush_accent}"/>
+                                        <TextBlock Text="グループのタブを属性カラー順に戻します"
+                                                   FontSize="11" Foreground="#888" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="{Binding status}" Style="{StaticResource status_label}" Margin="0,12,0,0"/>
+            </StackPanel>
+        </DataTemplate>
+
+    </UserControl.Resources>
+
+    <!-- ===== メインレイアウト ===== -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ヘッダーバー -->
+        <Border Grid.Row="0" Background="{DynamicResource brush_accent}" Padding="16,10">
+            <TextBlock Text="設定" Foreground="White" FontSize="18" FontWeight="Bold"
+                       VerticalAlignment="Center"/>
+        </Border>
+
+        <!-- コンテンツエリア（左ツリー + 右コンテンツ） -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ===== 左ナビゲーション（ツリー展開式） ===== -->
+            <Border Grid.Column="0" Background="#F0F4F8"
+                    BorderBrush="#CCDDF0" BorderThickness="0,0,1,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,8,0,0">
+
+                        <!-- DB設定 -->
+                        <Border x:Name="nav_db" Cursor="Hand" Padding="16,10"
+                                MouseLeftButtonUp="nav_item_Click"
+                                Tag="db">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding selected_nav.key}" Value="db">
+                                            <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="DB設定" FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#1A3A5C"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding selected_nav.key}" Value="db">
+                                                <Setter Property="Foreground" Value="White"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+
+                        <!-- アーカイブ済み現場（全員表示） -->
+                        <Border Cursor="Hand" Padding="16,10"
+                                MouseLeftButtonUp="nav_item_Click" Tag="archived">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding selected_nav.key}" Value="archived">
+                                            <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text"       Value="アーカイブ済み現場"/>
+                                        <Setter Property="Foreground" Value="#1A3A5C"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding selected_nav.key}" Value="archived">
+                                                <Setter Property="Foreground" Value="White"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+
+                        <!-- 詳細設定（全員表示） -->
+                        <Border Cursor="Hand" Padding="16,10"
+                                MouseLeftButtonUp="nav_item_Click" Tag="advanced">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding selected_nav.key}" Value="advanced">
+                                            <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text"       Value="詳細設定"/>
+                                        <Setter Property="Foreground" Value="#1A3A5C"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding selected_nav.key}" Value="advanced">
+                                                <Setter Property="Foreground" Value="White"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+
+                        <!-- ▼▼▼ [Sprint 5D] エラーログ参照（全員表示） ▼▼▼ -->
+                        <Border Cursor="Hand" Padding="16,10"
+                                MouseLeftButtonUp="nav_item_Click" Tag="error_log">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding selected_nav.key}" Value="error_log">
+                                            <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock FontSize="13">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text"       Value="エラーログ参照"/>
+                                        <Setter Property="Foreground" Value="#1A3A5C"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding selected_nav.key}" Value="error_log">
+                                                <Setter Property="Foreground" Value="White"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+
+                        <!-- ▼▼▼ 管理メニュー（全員表示・一番下） ▼▼▼ -->
+                        <Border Cursor="Hand" Padding="16,10" Margin="0,4,0,0"
+                                MouseLeftButtonUp="nav_admin_menu_Click">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding is_admin_menu_expanded}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Right" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="#1A3A5C" VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="▶"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding is_admin_menu_expanded}" Value="True">
+                                                    <Setter Property="Text" Value="▼"/>
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="管理メニュー"/>
+                                            <Setter Property="Foreground" Value="#1A3A5C"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding is_admin_menu_expanded}" Value="True">
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DockPanel>
+                        </Border>
+
+                        <!-- 管理メニュー展開内容（管理者のみ表示） -->
+                        <StackPanel Visibility="{Binding is_admin_menu_and_visible, Converter={StaticResource BoolToVis}}">
+
+                            <!-- マスタ管理（展開・折りたたみ） -->
+                            <Border Cursor="Hand" Padding="16,10"
+                                Background="Transparent"
+                                MouseLeftButtonUp="nav_master_header_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="マスタ管理" FontSize="13"
+                                           FontWeight="SemiBold" Foreground="#1A3A5C"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock FontSize="11" Foreground="{DynamicResource brush_accent}"
+                                           VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="▶"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding is_master_expanded}" Value="True">
+                                                        <Setter Property="Text" Value="▼"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- マスタ管理サブメニュー（展開時のみ表示） -->
+                            <StackPanel Visibility="{Binding is_master_expanded, Converter={StaticResource BoolToVis}}">
+                                <Border Cursor="Hand" Padding="28,8,16,8"
+                                    MouseLeftButtonUp="nav_item_Click" Tag="employees">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding selected_nav.key}" Value="employees">
+                                                    <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock FontSize="12">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text"       Value="人員マスタ"/>
+                                                <Setter Property="Foreground" Value="#333"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding selected_nav.key}" Value="employees">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                                <Border Cursor="Hand" Padding="28,8,16,8"
+                                    MouseLeftButtonUp="nav_item_Click" Tag="vehicles">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding selected_nav.key}" Value="vehicles">
+                                                    <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock FontSize="12">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text"       Value="車両マスタ"/>
+                                                <Setter Property="Foreground" Value="#333"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding selected_nav.key}" Value="vehicles">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                                <Border Cursor="Hand" Padding="28,8,16,8"
+                                    MouseLeftButtonUp="nav_item_Click" Tag="equipment">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding selected_nav.key}" Value="equipment">
+                                                    <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock FontSize="12">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text"       Value="機材マスタ"/>
+                                                <Setter Property="Foreground" Value="#333"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding selected_nav.key}" Value="equipment">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                                <Border Cursor="Hand" Padding="28,8,16,8"
+                                    MouseLeftButtonUp="nav_item_Click" Tag="legacy">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding selected_nav.key}" Value="legacy">
+                                                    <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock FontSize="12">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text"       Value="氏名変換"/>
+                                                <Setter Property="Foreground" Value="#333"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding selected_nav.key}" Value="legacy">
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- 金額設定（管理メニュー内） -->
+                            <Border Cursor="Hand" Padding="16,10"
+                                MouseLeftButtonUp="nav_item_Click" Tag="amount">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding selected_nav.key}" Value="amount">
+                                                <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock FontSize="13">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text"       Value="金額設定"/>
+                                            <Setter Property="Foreground" Value="#1A3A5C"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding selected_nav.key}" Value="amount">
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Border>
+
+                            <!-- ▼▼▼ 修正：タブ並び順リセットをユーザー管理の前に配置 ▼▼▼ -->
+                            <Border Cursor="Hand" Padding="16,10"
+                                MouseLeftButtonUp="nav_item_Click" Tag="tab_sort_reset">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding selected_nav.key}" Value="tab_sort_reset">
+                                                <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock FontSize="13">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text"       Value="タブ並び順リセット"/>
+                                            <Setter Property="Foreground" Value="#1A3A5C"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding selected_nav.key}" Value="tab_sort_reset">
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Border>
+
+                            <!-- ▼▼▼ [Sprint 5E] 追加：区分結合設定（管理者のみ） ▼▼▼ -->
+                            <Border Cursor="Hand" Padding="16,10"
+                                MouseLeftButtonUp="nav_item_Click" Tag="category_group">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding selected_nav.key}" Value="category_group">
+                                                <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock FontSize="13">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text"       Value="区分結合設定"/>
+                                            <Setter Property="Foreground" Value="#1A3A5C"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding selected_nav.key}" Value="category_group">
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Border>
+
+                            <!-- ▼▼▼ [Sprint 5F] 追加：バックアップ復元（管理者のみ） ▼▼▼ -->
+                            <Border Cursor="Hand" Padding="16,10"
+                                MouseLeftButtonUp="nav_item_Click" Tag="backup_restore">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding selected_nav.key}" Value="backup_restore">
+                                                <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock FontSize="13">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text"       Value="バックアップ復元"/>
+                                            <Setter Property="Foreground" Value="#1A3A5C"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding selected_nav.key}" Value="backup_restore">
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Border>
+
+                            <!-- ▼▼▼ 修正：ユーザー管理を一番下に移動 ▼▼▼ -->
+                            <Border Cursor="Hand" Padding="16,10"
+                                MouseLeftButtonUp="nav_item_Click" Tag="users">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding selected_nav.key}" Value="users">
+                                                <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock FontSize="13">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text"       Value="ユーザー管理"/>
+                                            <Setter Property="Foreground" Value="#1A3A5C"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding selected_nav.key}" Value="users">
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Border>
+
+                        </StackPanel>
+                        <!-- 管理メニュー展開内容 終了 -->
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- セパレーター -->
+            <Rectangle Grid.Column="1" Width="1" Fill="#CCDDF0"/>
+
+            <!-- ===== 右コンテンツエリア ===== -->
+            <Grid Grid.Column="2">
+
+                <!-- ▼▼▼ [Sprint 5D] エラーログ参照セクション ▼▼▼ -->
+                <Grid>
+                    <Grid.Style>
+                        <Style TargetType="Grid">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding current_content}" Value="{x:Null}"/>
+                                        <Condition Binding="{Binding is_error_log_page}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Grid.Style>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <!-- タイトル -->
+                        <RowDefinition Height="Auto"/>
+                        <!-- ユーザーカード -->
+                        <RowDefinition Height="*"/>
+                        <!-- ログ一覧 -->
+                        <RowDefinition Height="4"/>
+                        <!-- ローディングバー -->
+                    </Grid.RowDefinitions>
+
+                    <!-- タイトルバー -->
+                    <DockPanel Grid.Row="0" Margin="24,16,24,8">
+                        <TextBlock Text="エラーログ参照"
+                                   FontSize="15" FontWeight="Bold"
+                                   Foreground="{DynamicResource brush_accent}"
+                                   VerticalAlignment="Center"/>
+                        <Button Content="🔄 更新"
+                                Command="{Binding error_log_vm.refresh_command}"
+                                HorizontalAlignment="Right"
+                                Background="{DynamicResource brush_accent}"
+                                Foreground="White" FontSize="12"
+                                Padding="12,4" BorderThickness="0" Cursor="Hand"/>
+                    </DockPanel>
+
+                    <!-- ユーザーカード一覧 -->
+                    <Border Grid.Row="1" Margin="24,0,24,8" Padding="16,14"
+                            CornerRadius="6" Background="#F0F4F8"
+                            BorderBrush="#CCDDF0" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="PCユーザー一覧（クリックでログを確認）"
+                                       FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource brush_accent}"
+                                       Margin="0,0,0,10"/>
+                            <!-- エラーなし表示 -->
+                            <TextBlock Text="エラーログはまだ記録されていません"
+                                       FontSize="12" FontStyle="Italic" Foreground="#888">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding error_log_vm.has_users}" Value="False">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <!-- ユーザーカード群 -->
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Disabled">
+                                <ScrollViewer.Style>
+                                    <Style TargetType="ScrollViewer">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding error_log_vm.has_users}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ScrollViewer.Style>
+                                <ItemsControl ItemsSource="{Binding error_log_vm.user_cards}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Width="170" MinHeight="100"
+                                                    Margin="0,0,10,10" Padding="14,12"
+                                                    CornerRadius="6" Cursor="Hand">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background"      Value="White"/>
+                                                        <Setter Property="BorderThickness" Value="1.5"/>
+                                                        <Setter Property="BorderBrush"     Value="#CCDDF0"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding is_selected}" Value="True">
+                                                                <Setter Property="BorderBrush" Value="{DynamicResource brush_accent}"/>
+                                                                <Setter Property="Background"  Value="#EAF4FF"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Border.InputBindings>
+                                                    <MouseBinding MouseAction="LeftClick"
+                                                        Command="{Binding DataContext.error_log_vm.select_user_command,
+                                                            RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        CommandParameter="{Binding}"/>
+                                                </Border.InputBindings>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding user_name}"
+                                                               FontWeight="Bold" FontSize="13"
+                                                               Foreground="#1A3A5C"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Margin="0,0,0,4"/>
+                                                    <TextBlock FontSize="11" Foreground="#555">
+                                                        <Run Text="合計 "/>
+                                                        <Run Text="{Binding total_count}" FontWeight="SemiBold"/>
+                                                        <Run Text=" 件"/>
+                                                    </TextBlock>
+                                                    <Border Background="#FDECEA" CornerRadius="3"
+                                                            Padding="6,2" Margin="0,4,0,0"
+                                                            Visibility="{Binding has_unhandled,
+                                                                Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock Text="{Binding unhandled_badge}"
+                                                                   FontSize="11" FontWeight="SemiBold"
+                                                                   Foreground="#C62828"/>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding last_occurred_at, StringFormat='最終: {0}'}"
+                                                               FontSize="10" Foreground="#888"
+                                                               Margin="0,6,0,0"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ログ DataGrid -->
+                    <Border Grid.Row="2" Margin="24,0,24,4" Padding="16,14"
+                            CornerRadius="6" Background="#F0F4F8"
+                            BorderBrush="#CCDDF0" BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0"
+                                       Text="{Binding error_log_vm.log_title}"
+                                       FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource brush_accent}"
+                                       Margin="0,0,0,8"/>
+                            <DataGrid Grid.Row="1"
+                                      ItemsSource="{Binding error_log_vm.log_list}"
+                                      AutoGenerateColumns="False" IsReadOnly="True"
+                                      CanUserResizeRows="False" CanUserReorderColumns="False"
+                                      HeadersVisibility="Column"
+                                      GridLinesVisibility="Horizontal"
+                                      HorizontalGridLinesBrush="#DDDDDD"
+                                      SelectionMode="Single"
+                                      RowHeight="32" FontSize="12"
+                                      Background="White"
+                                      BorderThickness="1" BorderBrush="#CCCCCC"
+                                      VerticalScrollBarVisibility="Auto">
+                                <DataGrid.RowStyle>
+                                    <Style TargetType="DataGridRow">
+                                        <Style.Triggers>
+                                            <!-- caught → 赤字 -->
+                                            <DataTrigger Binding="{Binding error_type}" Value="caught">
+                                                <Setter Property="Foreground" Value="#C62828"/>
+                                                <Setter Property="FontWeight"  Value="Normal"/>
+                                            </DataTrigger>
+                                            <!-- unhandled → 太字 -->
+                                            <DataTrigger Binding="{Binding error_type}" Value="unhandled">
+                                                <Setter Property="Foreground" Value="#1A3A5C"/>
+                                                <Setter Property="FontWeight"  Value="SemiBold"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGrid.RowStyle>
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="発生日時"  Binding="{Binding occurred_at}" Width="145"/>
+                                    <DataGridTextColumn Header="種別"      Binding="{Binding error_type}"  Width="90"/>
+                                    <DataGridTextColumn Header="発生箇所"  Binding="{Binding source}"      Width="230"/>
+                                    <DataGridTextColumn Header="メッセージ" Binding="{Binding message}"     Width="*"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+
+                    <!-- ローディングバー -->
+                    <ProgressBar Grid.Row="3" IsIndeterminate="True" Height="4"
+                                 VerticalAlignment="Stretch"
+                                 Foreground="{DynamicResource brush_accent}"
+                                 Visibility="{Binding error_log_vm.is_loading,
+                                     Converter={StaticResource BoolToVis}}"/>
+                </Grid>
+                <!-- ▲▲▲ エラーログ参照セクション終了 ▲▲▲ -->
+
+                <!-- ▼▼▼ [Sprint 5E] 区分結合設定セクション ▼▼▼ -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer.Style>
+                        <Style TargetType="ScrollViewer">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding current_content}"        Value="{x:Null}"/>
+                                        <Condition Binding="{Binding is_category_group_page}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ScrollViewer.Style>
+                    <StackPanel Margin="24,20" MaxWidth="700">
+                        <TextBlock Text="区分結合設定" Style="{StaticResource section_header}"/>
+                        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#555" Margin="0,-8,0,16">
+                            <Run Text="入力ミスや区分変更で分かれてしまった現場を1つのタブに合算して表示します。"/>
+                            <LineBreak/>
+                            <Run Text="元データ（日報）は変更されません。表示・集計のみ合算されます。"/>
+                        </TextBlock>
+
+                        <!-- 新規追加フォーム -->
+                        <Border Background="#F0F4F8" CornerRadius="6" Padding="16,14"
+                                BorderThickness="1" BorderBrush="#CCDDF0" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="新規追加" FontWeight="Bold" FontSize="13"
+                                           Foreground="{DynamicResource brush_accent}" Margin="0,0,0,12"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <!-- 親コード入力欄（オートコンプリート付き） -->
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="親区分コード（タブに表示される代表）"
+                                                   FontSize="11" Foreground="#555" Margin="0,0,0,4"/>
+                                        <Grid>
+                                            <TextBox Text="{Binding category_group_vm.new_parent_code,
+                                                         UpdateSourceTrigger=PropertyChanged}"
+                                                     FontSize="13" Padding="8,6"
+                                                     CharacterCasing="Upper"
+                                                     x:Name="txt_parent"/>
+                                            <Popup IsOpen="{Binding category_group_vm.show_parent_suggestions, Mode=OneWay}"
+                                                   PlacementTarget="{Binding ElementName=txt_parent}"
+                                                   Placement="Bottom" StaysOpen="False"
+                                                   Width="{Binding ElementName=txt_parent, Path=ActualWidth}">
+                                                <Border Background="White" BorderBrush="#CCDDF0" BorderThickness="1">
+                                                    <ListBox ItemsSource="{Binding category_group_vm.parent_suggestions}"
+                                                             SelectedItem="{Binding category_group_vm.selected_parent_suggestion}"
+                                                             MaxHeight="160"
+                                                             FontSize="12"
+                                                             DisplayMemberPath="display_text"/>
+                                                </Border>
+                                            </Popup>
+                                        </Grid>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="←" FontSize="18"
+                                               VerticalAlignment="Bottom" Margin="12,0,12,6"
+                                               Foreground="{DynamicResource brush_accent}"/>
+                                    <!-- 子コード入力欄（オートコンプリート付き） -->
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="子区分コード（合算対象）"
+                                                   FontSize="11" Foreground="#555" Margin="0,0,0,4"/>
+                                        <Grid>
+                                            <TextBox Text="{Binding category_group_vm.new_child_code,
+                                                         UpdateSourceTrigger=PropertyChanged}"
+                                                     FontSize="13" Padding="8,6"
+                                                     CharacterCasing="Upper"
+                                                     x:Name="txt_child"/>
+                                            <Popup IsOpen="{Binding category_group_vm.show_child_suggestions, Mode=OneWay}"
+                                                   PlacementTarget="{Binding ElementName=txt_child}"
+                                                   Placement="Bottom" StaysOpen="False"
+                                                   Width="{Binding ElementName=txt_child, Path=ActualWidth}">
+                                                <Border Background="White" BorderBrush="#CCDDF0" BorderThickness="1">
+                                                    <ListBox ItemsSource="{Binding category_group_vm.child_suggestions}"
+                                                             SelectedItem="{Binding category_group_vm.selected_child_suggestion}"
+                                                             MaxHeight="160"
+                                                             FontSize="12"
+                                                             DisplayMemberPath="display_text"/>
+                                                </Border>
+                                            </Popup>
+                                        </Grid>
+                                    </StackPanel>
+                                    <Button Grid.Column="3"
+                                            Content="追加"
+                                            Command="{Binding category_group_vm.add_command}"
+                                            Style="{StaticResource btn_primary}"
+                                            Margin="12,0,0,0"
+                                            VerticalAlignment="Bottom"/>
+                                </Grid>
+                                <TextBlock Text="{Binding category_group_vm.status_message}"
+                                           FontSize="12" Margin="0,8,0,0"
+                                           Foreground="{DynamicResource brush_accent}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 結合設定一覧 -->
+                        <Border Background="#F0F4F8" CornerRadius="6" Padding="16,14"
+                                BorderThickness="1" BorderBrush="#CCDDF0">
+                            <StackPanel>
+                                <TextBlock Text="現在の結合設定" FontWeight="Bold" FontSize="13"
+                                           Foreground="{DynamicResource brush_accent}" Margin="0,0,0,12"/>
+
+                                <!-- 設定なし表示 -->
+                                <TextBlock Text="結合設定はまだありません"
+                                           FontSize="12" FontStyle="Italic" Foreground="#888">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding category_group_vm.group_items.Count}" Value="0">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
+                                <DataGrid ItemsSource="{Binding category_group_vm.group_items}"
+                                          AutoGenerateColumns="False" IsReadOnly="True"
+                                          CanUserResizeRows="False" CanUserReorderColumns="False"
+                                          HeadersVisibility="Column"
+                                          GridLinesVisibility="Horizontal"
+                                          HorizontalGridLinesBrush="#DDDDDD"
+                                          SelectionMode="Single"
+                                          RowHeight="36" FontSize="12"
+                                          Background="White"
+                                          BorderThickness="1" BorderBrush="#CCCCCC">
+                                    <DataGrid.Style>
+                                        <Style TargetType="DataGrid">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding category_group_vm.group_items.Count}" Value="0">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.Style>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="親区分コード（代表）"
+                                                            Binding="{Binding parent_code}"
+                                                            Width="200"/>
+                                        <DataGridTextColumn Header="←" Width="40"/>
+                                        <DataGridTextColumn Header="子区分コード（合算対象）"
+                                                            Binding="{Binding child_code}"
+                                                            Width="200"/>
+                                        <DataGridTextColumn Header="登録日時"
+                                                            Binding="{Binding created_at}"
+                                                            Width="150"/>
+                                        <DataGridTemplateColumn Header="操作" Width="80">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <Button Content="削除"
+                                                            Command="{Binding DataContext.category_group_vm.delete_command,
+                                                                RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource btn_danger}"
+                                                            Padding="8,3"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Width="*" IsReadOnly="True"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+
+                                <TextBlock Text="※ 削除後、原価集計画面を🔄更新すると個別タブに戻ります"
+                                           FontSize="11" Foreground="#E67E22" Margin="0,10,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+                <!-- ▲▲▲ 区分結合設定セクション終了 ▲▲▲ -->
+
+                <!-- ▼▼▼ [Sprint 5F] バックアップ復元セクション ▼▼▼ -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer.Style>
+                        <Style TargetType="ScrollViewer">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding current_content}"          Value="{x:Null}"/>
+                                        <Condition Binding="{Binding is_backup_restore_page}"   Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ScrollViewer.Style>
+                    <StackPanel Margin="24,20" MaxWidth="760">
+                        <TextBlock Text="バックアップ復元" Style="{StaticResource section_header}"/>
+                        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#555" Margin="0,-8,0,16">
+                            <Run Text="NASまたはローカルに保存されたバックアップファイルから復元します。"/>
+                            <LineBreak/>
+                            <Run Text="復元後はアプリが自動再起動されます。現在のデータは上書きされるため注意してください。"/>
+                        </TextBlock>
+
+                        <!-- 操作バー -->
+                        <DockPanel Margin="0,0,0,12">
+                            <Button DockPanel.Dock="Right"
+                                    Content="🔄 再読み込み"
+                                    Command="{Binding backup_restore_vm.reload_command}"
+                                    Style="{StaticResource btn_primary}"
+                                    Padding="12,6"/>
+                            <TextBlock Text="{Binding backup_restore_vm.status_message}"
+                                       FontSize="12" Foreground="{DynamicResource brush_accent}"
+                                       VerticalAlignment="Center"/>
+                        </DockPanel>
+
+                        <!-- ローディング -->
+                        <ProgressBar IsIndeterminate="True" Height="3"
+                                     Foreground="{DynamicResource brush_accent}"
+                                     Background="Transparent" BorderThickness="0"
+                                     Margin="0,0,0,8">
+                            <ProgressBar.Style>
+                                <Style TargetType="ProgressBar">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding backup_restore_vm.is_busy}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ProgressBar.Style>
+                        </ProgressBar>
+
+                        <!-- バックアップ一覧 -->
+                        <Border Background="#F0F4F8" CornerRadius="6" Padding="16,14"
+                                BorderThickness="1" BorderBrush="#CCDDF0" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="バックアップ一覧" FontWeight="Bold" FontSize="13"
+                                           Foreground="{DynamicResource brush_accent}" Margin="0,0,0,12"/>
+
+                                <!-- 件数0のとき -->
+                                <TextBlock Text="バックアップファイルが見つかりませんでした"
+                                           FontSize="12" FontStyle="Italic" Foreground="#888">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding backup_restore_vm.backup_items.Count}" Value="0">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
+                                <DataGrid ItemsSource="{Binding backup_restore_vm.backup_items}"
+                                          SelectedItem="{Binding backup_restore_vm.selected_item}"
+                                          AutoGenerateColumns="False" IsReadOnly="True"
+                                          CanUserResizeRows="False" CanUserReorderColumns="False"
+                                          SelectionMode="Single"
+                                          HeadersVisibility="Column"
+                                          GridLinesVisibility="Horizontal"
+                                          HorizontalGridLinesBrush="#DDDDDD"
+                                          RowHeight="36" FontSize="12"
+                                          Background="White"
+                                          MaxHeight="360"
+                                          BorderThickness="1" BorderBrush="#CCCCCC">
+                                    <DataGrid.Style>
+                                        <Style TargetType="DataGrid">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding backup_restore_vm.backup_items.Count}" Value="0">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.Style>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="種別"
+                                                            Binding="{Binding kind_text}"
+                                                            Width="110"/>
+                                        <DataGridTextColumn Header="作成日時"
+                                                            Binding="{Binding created_at}"
+                                                            Width="160"/>
+                                        <DataGridTextColumn Header="ファイル名"
+                                                            Binding="{Binding file_name}"
+                                                            Width="*"/>
+                                        <DataGridTextColumn Header="サイズ"
+                                                            Binding="{Binding file_size}"
+                                                            Width="80"/>
+                                        <DataGridTextColumn Header="保存場所"
+                                                            Binding="{Binding location}"
+                                                            Width="80"/>
+                                    </DataGrid.Columns>
+                                    <DataGrid.RowStyle>
+                                        <Style TargetType="DataGridRow">
+                                            <Style.Triggers>
+                                                <!-- 復元前退避ファイルはオレンジ背景で強調 -->
+                                                <DataTrigger Binding="{Binding is_safety_backup}" Value="True">
+                                                    <Setter Property="Background" Value="#FFF3E0"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </DataTrigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource brush_accent_light}"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.RowStyle>
+                                </DataGrid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 復元ボタン -->
+                        <Border Background="#FFF3E0" CornerRadius="6" Padding="16,14"
+                                BorderThickness="1" BorderBrush="#FFCC80">
+                            <StackPanel>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#795548"
+                                           Margin="0,0,0,10">
+                                    <Run FontWeight="Bold">⚠ 注意：</Run>
+                                    <Run>リストからバックアップを選択して「復元」を押してください。現在のDBは上書きされます。</Run>
+                                </TextBlock>
+                                <Button Content="⬆ 選択したバックアップに復元"
+                                        Command="{Binding backup_restore_vm.restore_command}"
+                                        IsEnabled="{Binding backup_restore_vm.can_restore}"
+                                        Background="#E67E22" Foreground="White"
+                                        FontWeight="Bold" FontSize="13"
+                                        Padding="16,8" BorderThickness="0"
+                                        Cursor="Hand"
+                                        HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+                <!-- ▲▲▲ バックアップ復元セクション終了 ▲▲▲ -->
+
+                <!-- ▼▼▼ 追加：詳細設定セクション（selected_nav.key == "advanced" の場合に表示） ▼▼▼ -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer.Style>
+                        <Style TargetType="ScrollViewer">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <!-- 詳細設定：current_content=null かつ is_advanced_page=True の場合に表示 -->
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding current_content}" Value="{x:Null}"/>
+                                        <Condition Binding="{Binding is_advanced_page}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ScrollViewer.Style>
+                    <StackPanel Margin="24,20" MaxWidth="600">
+
+                        <TextBlock Text="詳細設定" Style="{StaticResource section_header}"/>
+                        <TextBlock Text="※ この設定はこのPCのみに保存されます。カラー・フォント・色帯は即時反映。起動ページ・大区分記憶は「保存して再起動」で反映されます。"
+                                   FontSize="11" Foreground="#E67E22" Margin="0,-8,0,16" TextWrapping="Wrap"/>
+
+                        <!-- カラーテーマ -->
+                        <Border Background="#F0F4F8" CornerRadius="6" Padding="16,14"
+                                BorderThickness="1" BorderBrush="#CCDDF0" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="カラーテーマ" FontWeight="Bold" FontSize="13"
+                                           Foreground="{DynamicResource brush_accent}" Margin="0,0,0,10"/>
+                                <WrapPanel>
+                                    <RadioButton Content="水色（デフォルト）"
+                                                 IsChecked="{Binding theme, Converter={StaticResource StrEqual}, ConverterParameter=cyan}"
+                                                 GroupName="theme" FontSize="12" Margin="0,0,16,6"/>
+                                    <RadioButton Content="濃い青"
+                                                 IsChecked="{Binding theme, Converter={StaticResource StrEqual}, ConverterParameter=blue}"
+                                                 GroupName="theme" FontSize="12" Margin="0,0,16,6"/>
+                                    <RadioButton Content="緑"
+                                                 IsChecked="{Binding theme, Converter={StaticResource StrEqual}, ConverterParameter=green}"
+                                                 GroupName="theme" FontSize="12" Margin="0,0,16,6"/>
+                                    <RadioButton Content="パープル"
+                                                 IsChecked="{Binding theme, Converter={StaticResource StrEqual}, ConverterParameter=purple}"
+                                                 GroupName="theme" FontSize="12" Margin="0,0,16,6"/>
+                                    <RadioButton Content="グレー"
+                                                 IsChecked="{Binding theme, Converter={StaticResource StrEqual}, ConverterParameter=gray}"
+                                                 GroupName="theme" FontSize="12" Margin="0,0,16,6"/>
+                                    <RadioButton Content="ピンク"
+                                                 IsChecked="{Binding theme, Converter={StaticResource StrEqual}, ConverterParameter=pink}"
+                                                 GroupName="theme" FontSize="12" Margin="0,0,0,6"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ③ フォントサイズ -->
+                        <Border Background="#F0F4F8" CornerRadius="6" Padding="16,14"
+                                BorderThickness="1" BorderBrush="#CCDDF0" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="フォントサイズ" FontWeight="Bold" FontSize="13"
+                                           Foreground="{DynamicResource brush_accent}" Margin="0,0,0,10"/>
+                                <WrapPanel>
+                                    <RadioButton Content="小"
+                                                 IsChecked="{Binding font_size, Converter={StaticResource StrEqual}, ConverterParameter=small}"
+                                                 GroupName="font_size" FontSize="12" Margin="0,0,16,0"/>
+                                    <RadioButton Content="中（デフォルト）"
+                                                 IsChecked="{Binding font_size, Converter={StaticResource StrEqual}, ConverterParameter=medium}"
+                                                 GroupName="font_size" FontSize="12" Margin="0,0,16,0"/>
+                                    <RadioButton Content="大"
+                                                 IsChecked="{Binding font_size, Converter={StaticResource StrEqual}, ConverterParameter=large}"
+                                                 GroupName="font_size" FontSize="12" Margin="0,0,0,0"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ④ 起動時のページ -->
+                        <Border Background="#F0F4F8" CornerRadius="6" Padding="16,14"
+                                BorderThickness="1" BorderBrush="#CCDDF0" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="起動時に表示するページ" FontWeight="Bold" FontSize="13"
+                                           Foreground="{DynamicResource brush_accent}" Margin="0,0,0,10"/>
+                                <WrapPanel>
+                                    <RadioButton Content="ダッシュボード（デフォルト）"
+                                                 IsChecked="{Binding startup_page, Converter={StaticResource StrEqual}, ConverterParameter=dashboard}"
+                                                 GroupName="startup_page" FontSize="12" Margin="0,0,16,0"/>
+                                    <RadioButton Content="原価集計"
+                                                 IsChecked="{Binding startup_page, Converter={StaticResource StrEqual}, ConverterParameter=cost}"
+                                                 GroupName="startup_page" FontSize="12" Margin="0,0,0,0"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ⑤ 現場タブの色帯の幅 -->
+                        <Border Background="#F0F4F8" CornerRadius="6" Padding="16,14"
+                                BorderThickness="1" BorderBrush="#CCDDF0" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="現場タブの色帯の幅" FontWeight="Bold" FontSize="13"
+                                           Foreground="{DynamicResource brush_accent}" Margin="0,0,0,10"/>
+                                <WrapPanel>
+                                    <RadioButton Content="細"
+                                                 IsChecked="{Binding tab_color_bar_width, Converter={StaticResource IntEqual}, ConverterParameter=4}"
+                                                 GroupName="tab_bar" FontSize="12" Margin="0,0,16,0"/>
+                                    <RadioButton Content="普通（デフォルト）"
+                                                 IsChecked="{Binding tab_color_bar_width, Converter={StaticResource IntEqual}, ConverterParameter=6}"
+                                                 GroupName="tab_bar" FontSize="12" Margin="0,0,16,0"/>
+                                    <RadioButton Content="太"
+                                                 IsChecked="{Binding tab_color_bar_width, Converter={StaticResource IntEqual}, ConverterParameter=10}"
+                                                 GroupName="tab_bar" FontSize="12" Margin="0,0,0,0"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ⑥ 大区分の選択を記憶する -->
+                        <Border Background="#F0F4F8" CornerRadius="6" Padding="16,14"
+                                BorderThickness="1" BorderBrush="#CCDDF0" Margin="0,0,0,16">
+                            <StackPanel>
+                                <CheckBox Content="大区分の選択を記憶する"
+                                          IsChecked="{Binding remember_group}"
+                                          FontSize="13" Margin="0,0,0,4"/>
+                                <TextBlock Text="ONにすると前回選択していた大区分（EA・RD等）を記憶して次回起動時に自動選択します。"
+                                           FontSize="11" Foreground="#666" Margin="20,0,0,0"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ⑦ 選択タブの拡大表示 -->
+                        <Border Background="#F0F4F8" CornerRadius="6" Padding="16,14"
+                                BorderThickness="1" BorderBrush="#CCDDF0" Margin="0,0,0,16">
+                            <StackPanel>
+                                <CheckBox Content="選択中の現場タブを拡大表示する"
+                                          IsChecked="{Binding tab_enlarge_on_select}"
+                                          FontSize="13" Margin="0,0,0,4"/>
+                                <TextBlock Text="ONにすると選択中の現場タブが大きく表示されます。OFFにするとすべてのタブが均一サイズになります。即時反映されます。"
+                                           FontSize="11" Foreground="#666" Margin="20,0,0,0"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="💾 詳細設定を保存"
+                                            Click="btn_save_advanced_Click"
+                                            Style="{StaticResource btn_success}"/>
+                            <!-- ▼▼▼ タブ表示モード・起動ページ等は再起動で反映 ▼▼▼ -->
+                            <Button Content="🔄 保存して再起動"
+                                            Click="btn_save_and_restart_Click"
+                                            Background="#E67E22" Foreground="White"
+                                            FontSize="12" FontWeight="Bold"
+                                            Padding="14,6" Cursor="Hand"
+                                            BorderThickness="0"/>
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding status_message}" Style="{StaticResource status_label}"/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- DB設定セクション（selected_nav.key == "db" の場合に表示） -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer.Style>
+                        <Style TargetType="ScrollViewer">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <!-- DB設定：current_content=null かつ 詳細設定ページでない かつ エラーログページでない場合に表示 -->
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding current_content}" Value="{x:Null}"/>
+                                        <Condition Binding="{Binding is_advanced_page}"  Value="False"/>
+                                        <Condition Binding="{Binding is_error_log_page}"      Value="False"/>
+                                        <Condition Binding="{Binding is_category_group_page}" Value="False"/>
+                                        <!-- ▼ [Sprint 5E] 追加 -->
+                                        <Condition Binding="{Binding is_backup_restore_page}" Value="False"/>
+                                        <!-- ▼ [Sprint 5F] 追加 -->
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ScrollViewer.Style>
+                    <StackPanel Margin="24,20" MaxWidth="600">
+
+                        <TextBlock Text="DB設定" Style="{StaticResource section_header}"/>
+
+                        <!-- DB保存先セクション -->
+                        <Border Background="#F0F4F8" CornerRadius="6" Padding="16,14"
+                                BorderThickness="1" BorderBrush="#CCDDF0" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="データベース保存先" FontWeight="Bold" FontSize="13"
+                                           Foreground="{DynamicResource brush_accent}" Margin="0,0,0,12"/>
+
+                                <TextBlock Text="現在のDBパス：" FontSize="12" Foreground="#555" Margin="0,0,0,4"/>
+                                <Border Background="White" BorderBrush="#BCD" BorderThickness="1"
+                                        CornerRadius="3" Padding="8,6" Margin="0,0,0,14">
+                                    <TextBlock Text="{Binding current_db_path}" FontSize="11"
+                                               Foreground="#333" TextWrapping="Wrap"/>
+                                </Border>
+
+                                <CheckBox Content="NASにデータベースを保存する"
+                                          IsChecked="{Binding nas_enabled}"
+                                          FontSize="13" Margin="0,0,0,10"/>
+
+                                <TextBlock Text="NASパス：" FontSize="12" Foreground="#555" Margin="0,0,0,4"/>
+                                <TextBox Text="{Binding nas_path, UpdateSourceTrigger=PropertyChanged}"
+                                         FontSize="12" Padding="8,6" Margin="0,0,0,4"
+                                         IsEnabled="{Binding nas_enabled}"/>
+                                <TextBlock Text="例：\\NAS7E6AA6\Public\000_事務関係\100_SE管理\01_EABASE Series\00_Database\ea_core.db"
+                                           FontSize="10" Foreground="#888" Margin="0,0,0,6"/>
+
+                                <!-- テスト用パス クイックセットボタン -->
+                                <Border Background="#FFFBE6" BorderBrush="#F0C040"
+                                        BorderThickness="1" CornerRadius="4"
+                                        Padding="10,8" Margin="0,0,0,8">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🧪 テスト用：" FontSize="11"
+                                                   Foreground="#B8860B" VerticalAlignment="Center"
+                                                   Margin="0,0,6,0" FontWeight="SemiBold"/>
+                                        <TextBlock Text="\\NAS7E6AA6\Public\000_事務関係\100_SE管理\99_Test\01_CostManager\ea_core.db"
+                                                   FontSize="10" Foreground="#555"
+                                                   VerticalAlignment="Center" Margin="0,0,10,0"
+                                                   TextWrapping="Wrap" MaxWidth="300"/>
+                                        <Button Content="セット"
+                                                FontSize="11" Padding="8,4"
+                                                Background="#F0C040" Foreground="#333"
+                                                BorderThickness="0" Cursor="Hand"
+                                                Click="btn_set_test_path_Click"
+                                                ToolTip="テスト用DBパスをNASパス欄にセットします"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- ▼▼▼ 追加⑨：標準DB（本番NAS）クイックセットボタン ▼▼▼ -->
+                                <Border Background="#EAF6FF" BorderBrush="#5BA4CF"
+                                        BorderThickness="1" CornerRadius="4"
+                                        Padding="10,8" Margin="0,0,0,14">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="🏢 標準DB：" FontSize="11"
+                                                   Foreground="#1A5C99" VerticalAlignment="Center"
+                                                   Margin="0,0,6,0" FontWeight="SemiBold"/>
+                                        <TextBlock Text="\\NAS7E6AA6\Public\000_事務関係\100_SE管理\01_EABASE Series\00_Database\ea_core.db"
+                                                   FontSize="10" Foreground="#555"
+                                                   VerticalAlignment="Center" Margin="0,0,10,0"
+                                                   TextWrapping="Wrap" MaxWidth="300"/>
+                                        <Button Content="セット"
+                                                FontSize="11" Padding="8,4"
+                                                Background="{DynamicResource brush_accent}" Foreground="White"
+                                                BorderThickness="0" Cursor="Hand"
+                                                Click="btn_set_production_path_Click"
+                                                ToolTip="標準DB（本番NAS）のパスをNASパス欄にセットします"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                    <Button Content="接続確認"
+                                            Command="{Binding check_nas_command}"
+                                            IsEnabled="{Binding nas_enabled}"
+                                            Style="{StaticResource btn_primary}"/>
+                                    <TextBlock Text="{Binding nas_status_message}"
+                                               FontSize="12" VerticalAlignment="Center"
+                                               Foreground="{Binding nas_status_color}"/>
+                                </StackPanel>
+
+                                <!-- ▼▼▼ 修正：Commandバインド → Clickハンドラーに変更（保存後に自動再起動）▼▼▼ -->
+                                <Button Content="設定を保存して再起動"
+                                        Click="btn_save_db_and_restart_Click"
+                                        Style="{StaticResource btn_success}"
+                                        HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ローカルDBパス -->
+                        <Border Background="#FFF8F0" CornerRadius="6" Padding="14,12"
+                                BorderThickness="1" BorderBrush="#F0CCA0">
+                            <StackPanel>
+                                <TextBlock Text="ローカル保存先（NAS未使用時）" FontWeight="Bold"
+                                           FontSize="12" Foreground="#E67E22" Margin="0,0,0,6"/>
+                                <TextBlock Text="{Binding local_db_path}" FontSize="11"
+                                           Foreground="#555" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ステータス -->
+                        <TextBlock Text="{Binding status_message}" Style="{StaticResource status_label}"/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- current_content が null のとき Collapsed、それ以外は Visible -->
+                <ContentControl Content="{Binding current_content}">
+                    <ContentControl.Style>
+                        <Style TargetType="ContentControl">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding current_content}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ContentControl.Style>
+                </ContentControl>
+
+            </Grid>
+        </Grid>
+
+        <!-- ローディングオーバーレイ -->
+        <Grid Grid.Row="1" Background="#80000000"
+              Visibility="{Binding is_busy, Converter={StaticResource BoolToVis}}">
+            <Border Background="White" CornerRadius="8" Padding="24,16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="{Binding status_message}" FontSize="13"
+                           HorizontalAlignment="Center"/>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

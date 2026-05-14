@@ -1,0 +1,408 @@
+<UserControl x:Class="EA_CostManager.Views.DashboardPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:EA_CostManager.Converters"
+             Background="{StaticResource brush_bg_main}">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
+
+    <Grid>
+        <ScrollViewer x:Name="main_scroll"
+                      VerticalScrollBarVisibility="Auto" Padding="32">
+            <StackPanel>
+                <TextBlock Text="ダッシュボード"
+                           Style="{StaticResource style_page_title}" />
+
+                <!-- ===== [Sprint 6] アップデート通知バナー ===== -->
+                <Border Margin="0,0,0,20"
+                        Background="#E67E22"
+                        CornerRadius="8"
+                        Padding="16,14">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding has_pending_update}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button x:Name="btn_install_update"
+                                    Content="今すぐ更新してインストール"
+                                    Background="White"
+                                    Foreground="#E67E22"
+                                    FontWeight="Bold"
+                                    FontSize="12"
+                                    Padding="14,6"
+                                    BorderThickness="0"
+                                    Cursor="Hand"
+                                    Margin="0,0,8,0"
+                                    Click="btn_install_update_Click"/>
+                        </StackPanel>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding update_banner_text}"
+                                       Foreground="White"
+                                       FontWeight="Bold"
+                                       FontSize="14"/>
+                            <TextBlock Text="インストーラーをNASからダウンロードして自動実行します。"
+                                       Foreground="White"
+                                       FontSize="11"
+                                       Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- ===== お知らせセクション（NAS の news.json がある場合のみ表示）===== -->
+                <Border Style="{StaticResource style_card}" Margin="0,0,0,20"
+                        Visibility="{Binding has_news, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+
+                        <!-- セクションヘッダー -->
+                        <TextBlock Text="📢  お知らせ"
+                                   FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource brush_text_primary}"
+                                   Margin="0,0,0,14"/>
+
+                        <!-- お知らせ一覧 -->
+                        <ItemsControl ItemsSource="{Binding news_items}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="#E8EEF4" BorderThickness="0,0,0,1"
+                                            Padding="4,10">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                <!-- 日付 -->
+                                                <TextBlock Text="{Binding display_date}"
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource brush_text_secondary}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="0,0,10,0"/>
+                                                <!-- NEW バッジ（7日以内） -->
+                                                <Border Background="#E53935" CornerRadius="4"
+                                                        Padding="5,1" VerticalAlignment="Center"
+                                                        Margin="0,0,8,0">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding has_new_badge}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="NEW" FontSize="9" FontWeight="Bold"
+                                                               Foreground="White"/>
+                                                </Border>
+                                                <!-- タイトル -->
+                                                <TextBlock Text="{Binding title}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource brush_text_primary}"
+                                                           VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <!-- 本文 -->
+                                            <TextBlock Text="{Binding body}"
+                                                       FontSize="12"
+                                                       Foreground="{StaticResource brush_text_secondary}"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,2,0,0"/>
+
+                                            <!-- ▼▼▼ 追加：ダウンロードボタン（url が設定されている場合のみ表示）▼▼▼ -->
+                                            <!-- has_download = !string.IsNullOrWhiteSpace(url) で制御 -->
+                                            <!-- Tag に url 文字列を渡してコードビハインドで処理する -->
+                                            <Button Content="📎 添付ファイルをダウンロード"
+                                                    Tag="{Binding url}"
+                                                    Click="btn_news_download_Click"
+                                                    FontSize="11"
+                                                    Padding="10,5"
+                                                    Margin="0,8,0,0"
+                                                    HorizontalAlignment="Left"
+                                                    Cursor="Hand"
+                                                    Background="{StaticResource brush_accent}"
+                                                    Foreground="White"
+                                                    BorderThickness="0">
+                                                <Button.Style>
+                                                    <Style TargetType="Button">
+                                                        <!-- デフォルトは非表示 -->
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <!-- has_download=true のときのみ表示 -->
+                                                            <DataTrigger Binding="{Binding has_download}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <!-- ▲▲▲ ダウンロードボタンここまで ▲▲▲ -->
+
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== 操作ログセクション ===== -->
+                <Border Style="{StaticResource style_card}" Margin="0,0,0,20">
+                    <StackPanel>
+
+                        <!-- セクションヘッダー -->
+                        <DockPanel Margin="0,0,0,14">
+                            <TextBlock DockPanel.Dock="Left"
+                                       Text="📋  操作履歴"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource brush_text_primary}"
+                                       VerticalAlignment="Center"/>
+                            <Button DockPanel.Dock="Right"
+                                    Content="🔄 更新"
+                                    Click="btn_refresh_Click"
+                                    HorizontalAlignment="Right"
+                                    FontSize="11" Padding="10,4"
+                                    Cursor="Hand"
+                                    Background="{StaticResource brush_accent}"
+                                    Foreground="White"
+                                    BorderThickness="0"/>
+                        </DockPanel>
+
+                        <!-- ログなし表示 -->
+                        <TextBlock Text="操作履歴はまだありません。"
+                                   FontSize="12" Foreground="{StaticResource brush_text_secondary}"
+                                   Margin="0,4,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding operation_logs.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <!-- ログ一覧（10行超でスクロール）-->
+                        <ScrollViewer MaxHeight="360"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding operation_logs}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="#E8EEF4" BorderThickness="0,0,0,1"
+                                            Padding="4,8">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="28"/>
+                                                    <ColumnDefinition Width="90"/>
+                                                    <ColumnDefinition Width="100"/>
+                                                    <ColumnDefinition Width="90"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding icon}"
+                                                       FontSize="13" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding display_datetime}"
+                                                       FontSize="11" Foreground="{StaticResource brush_text_secondary}"
+                                                       VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding operator_name}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource brush_text_primary}"
+                                                       VerticalAlignment="Center"/>
+                                                <!-- 操作種別：アーカイブ系は赤・その他はアクセントカラー -->
+                                                <TextBlock Grid.Column="3" Text="{Binding operation_type}"
+                                                       FontSize="11"
+                                                       VerticalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{StaticResource brush_accent}"/>
+                                                            <Style.Triggers>
+                                                                <!-- 現場アーカイブ・削除系は赤で表示 -->
+                                                                <DataTrigger Binding="{Binding operation_type}" Value="現場アーカイブ">
+                                                                    <Setter Property="Foreground" Value="#E53935"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <TextBlock Grid.Column="4" Text="{Binding detail}"
+                                                       FontSize="11" Foreground="{StaticResource brush_text_secondary}"
+                                                       VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== 日報読込履歴セクション ===== -->
+                <Border Style="{StaticResource style_card}" Margin="0,0,0,20">
+                    <StackPanel>
+
+                        <!-- セクションヘッダー -->
+                        <TextBlock Text="📥  日報読込履歴"
+                                   FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource brush_text_primary}"
+                                   Margin="0,0,0,14"/>
+
+                        <!-- 履歴なし表示 -->
+                        <TextBlock Text="日報の読込履歴はまだありません。"
+                                   FontSize="12" Foreground="{StaticResource brush_text_secondary}"
+                                   Margin="0,4,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding import_batches.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <!-- 読込バッチ一覧（5件超でスクロール）-->
+                        <ScrollViewer MaxHeight="330"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding import_batches}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#F7FAFD" CornerRadius="6"
+                                            BorderBrush="#CCDDF0" BorderThickness="1"
+                                            Padding="14,10" Margin="0,0,0,8">
+
+                                            <!-- ★v0.9.7修正：1ファイル/複数ファイルで表示を切替 -->
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- ===== 左側：ファイル情報 ===== -->
+                                                <StackPanel Grid.Column="0">
+
+                                                    <!-- 1ファイルの場合：ファイル名を大きく表示（従来通り） -->
+                                                    <TextBlock Text="{Binding file_name}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource brush_text_primary}"
+                                                           Margin="0,0,0,4">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding is_multi_file}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+
+                                                    <!-- 日時・担当者（共通） -->
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding display_datetime}"
+                                                               FontSize="11"
+                                                               Foreground="{StaticResource brush_text_secondary}"
+                                                               Margin="0,0,12,0"/>
+                                                        <TextBlock Text="{Binding operator_name}"
+                                                               FontSize="11"
+                                                               Foreground="{StaticResource brush_accent}"/>
+                                                    </StackPanel>
+
+                                                    <!-- 複数ファイルの場合：ファイル一覧を表示 -->
+                                                    <TextBlock Text="{Binding file_list_text}"
+                                                           FontSize="12"
+                                                           Foreground="{StaticResource brush_text_primary}"
+                                                           Margin="4,6,0,2"
+                                                           LineHeight="20">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding is_multi_file}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+
+                                                </StackPanel>
+
+                                                <!-- ===== 右側：件数バッジ ===== -->
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+
+                                                    <!-- 1ファイル時：件数バッジのみ -->
+                                                    <Border Background="{StaticResource brush_accent}"
+                                                        CornerRadius="12" Padding="10,4">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding is_multi_file}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock Foreground="White" FontSize="12" FontWeight="Bold">
+                                                            <Run Text="{Binding record_count, Mode=OneWay}"/>
+                                                            <Run Text="件"/>
+                                                        </TextBlock>
+                                                    </Border>
+
+                                                    <!-- 複数ファイル時：合計件数バッジ -->
+                                                    <Border Background="{StaticResource brush_accent}"
+                                                        CornerRadius="12" Padding="10,4">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding is_multi_file}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock Foreground="White" FontSize="12" FontWeight="Bold"
+                                                               Text="{Binding total_text}"/>
+                                                    </Border>
+
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                    </StackPanel>
+                </Border>
+
+                <!-- ステータス -->
+                <TextBlock Text="{Binding status}"
+                           FontSize="11" Foreground="OrangeRed" Margin="0,0,0,8"
+                           Visibility="{Binding status, Converter={StaticResource BoolToVis}}"/>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ローディングバー（下部・CostPageと統一）-->
+        <ProgressBar VerticalAlignment="Bottom"
+                     IsIndeterminate="True"
+                     Height="4"
+                     Foreground="{DynamicResource brush_accent}"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Visibility="{Binding is_busy, Converter={StaticResource BoolToVis}}"/>
+    </Grid>
+</UserControl>

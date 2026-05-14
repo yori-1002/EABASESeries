@@ -1,0 +1,75 @@
+<Window x:Class="EA_CostManager.Views.rates_action_dialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="単価を保存しました"
+        Width="460" Height="340"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ヘッダー -->
+        <Border Grid.Row="0" Background="#EEF4FB" CornerRadius="4"
+                Padding="12,8" Margin="0,0,0,16">
+            <StackPanel>
+                <TextBlock Text="✅  単価の設定を保存しました"
+                           FontSize="13" FontWeight="Bold" Foreground="#2E75B6"/>
+                <TextBlock Text="この後の操作を選択してください"
+                           FontSize="11" Foreground="#666" Margin="0,4,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 選択ボタン -->
+        <StackPanel Grid.Row="1" VerticalAlignment="Center">
+
+            <Button x:Name="btn_reaggregate" Click="btn_reaggregate_Click"
+                    HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                    Padding="12,10" Background="#2E75B6" Foreground="White"
+                    BorderThickness="0" Cursor="Hand">
+                <StackPanel>
+                    <TextBlock Text="🔄  すべてのタブで再集計" FontSize="13" FontWeight="Bold"/>
+                    <TextBlock Text="全件・絞り込みタブ含むすべてに新しい単価を反映して再集計"
+                               FontSize="10" Foreground="#CADCFC" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Button>
+
+            <!-- ▼▼▼ 追加：このタブのみに反映して再集計 ▼▼▼ -->
+            <Button x:Name="btn_reaggregate_current" Click="btn_reaggregate_current_Click"
+                    HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                    Padding="12,10" Background="#27AE60" Foreground="White"
+                    BorderThickness="0" Cursor="Hand">
+                <StackPanel>
+                    <TextBlock Text="🔄  このタブに反映して再集計" FontSize="13" FontWeight="Bold"/>
+                    <TextBlock Text="現在開いているタブのみ新しい単価で再集計。他のタブはそのまま"
+                               FontSize="10" Foreground="#C3F0D4" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Button>
+
+            <Button x:Name="btn_new_tab" Click="btn_new_tab_Click"
+                    HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                    Padding="12,10" Background="#8E44AD" Foreground="White"
+                    BorderThickness="0" Cursor="Hand">
+                <StackPanel>
+                    <TextBlock Text="＋  単価変更で新規タブ作成" FontSize="13" FontWeight="Bold"/>
+                    <TextBlock Text="新規絞り込みタブのみに単価を反映。メインタブはそのまま"
+                               FontSize="10" Foreground="#E8CEFF" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Button>
+
+        </StackPanel>
+
+        <!-- 後で反映 -->
+        <Button Grid.Row="2" x:Name="btn_later" Click="btn_later_Click"
+                HorizontalAlignment="Right" Padding="12,6"
+                Background="Transparent" Foreground="#888"
+                BorderBrush="#CCC" BorderThickness="1" Cursor="Hand">
+            <TextBlock Text="後で反映する"/>
+        </Button>
+    </Grid>
+</Window>

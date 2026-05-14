@@ -1,0 +1,104 @@
+﻿<Window x:Class="EA_CostManager.Views.SplashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterScreen"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Width="460" Height="250">
+    <!--
+    ▼ 追加（v1.0.2）：起動時スプラッシュウィンドウ
+    ・WindowStyle=None / AllowsTransparency=True で角丸ウィンドウを実現
+    ・Topmost=True / ShowInTaskbar=False で起動中の最前面表示
+    ・ドロップシャドウで浮き出し感を演出
+    ・460x250 サイズ、左帯12pxの NAVY + 白背景
+    ・update_status() を呼ぶことで起動の段階を可視化
+
+    ▼ 修正（v1.0.2 アイコンぼやけ対策）：
+    ・Window 全体に UseLayoutRounding / SnapsToDevicePixels を設定し、
+      サブピクセル位置に要素が置かれることによるぼやけを防止
+    -->
+    <Border Background="White" CornerRadius="12" Margin="20">
+        <!-- ▼ ドロップシャドウ（ふんわり浮かす） -->
+        <Border.Effect>
+            <DropShadowEffect Color="#333333" Opacity="0.35" BlurRadius="20" ShadowDepth="0"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 左帯：ロイヤルブルー（操作マニュアルと統一）-->
+            <Border Grid.Column="0" Background="#3457D5" CornerRadius="12,0,0,12"/>
+
+            <!-- ▼ アイコン部（80x80）
+                 Source はコードビハインドで動的にセットする
+                 （実行ディレクトリの icon_fix.ico を読み込むため・xaml.cs 側で実装）
+                 失敗時は Visibility.Collapsed でこの領域だけ非表示
+
+                 ▼ 修正（v1.0.2 アイコンぼやけ対策 第二弾）：
+                 ・RenderOptions.EdgeMode="Aliased" を削除（▼ 削除）
+                   Aliased はベクター図形用の設定であり、ビットマップ画像に
+                   適用するとサブピクセル位置調整が無効化されてぼやけの原因となる。
+                   既定値（Unspecified）に戻すことで画像本来の補間処理に任せる。
+                 ・BitmapScalingMode="Fant" は維持（縮小時の補間品質が高い）
+                 ・SnapsToDevicePixels / UseLayoutRounding は維持（位置の整数化） -->
+            <Border Grid.Column="1" Width="120" VerticalAlignment="Center">
+                <Image x:Name="app_icon"
+                       Width="80" Height="80"
+                       RenderOptions.BitmapScalingMode="Fant"
+                       SnapsToDevicePixels="True"
+                       UseLayoutRounding="True"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+
+            <!-- ▼ 右ペイン：情報・ステータス -->
+            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="0,20,30,20">
+                <!-- タイトル -->
+                <TextBlock Text="CostManager"
+                           FontSize="22" FontWeight="Bold"
+                           Foreground="#1E3A8A"
+                           FontFamily="Yu Gothic UI"/>
+            <!-- バージョン + サブタイトル
+             ▼ 修正（v1.0.2 ハードコード除去）：
+             ・Text 属性をやめて Run を2分割
+             ・1つ目の Run（version_number）はコードビハインドで AppVersionInfo から動的セット
+             ・2つ目の Run（サブタイトル）は xaml で固定・ここを編集すれば表示に反映される
+             ・xml:space="preserve" で Run 間の空白を保持 -->
+            <TextBlock x:Name="version_text"
+           FontSize="11"
+           Foreground="#7A8899"
+           Margin="0,2,0,12"
+           FontFamily="Yu Gothic UI"
+           xml:space="preserve"><Run x:Name="version_number" Text="v?.?.?"/><Run Text="  /  原価集計"/></TextBlock>
+
+                <!-- 区切り線 -->
+                <Border Height="1" Background="#E0E0E0" Margin="0,0,0,12"/>
+
+                <!-- ステータステキスト（update_status で書き換え） -->
+                <TextBlock x:Name="status_text"
+                           Text="起動中..."
+                           FontSize="12"
+                           Foreground="#36454F"
+                           Margin="0,0,0,10"
+                           FontFamily="Yu Gothic UI"/>
+
+                <!-- プログレスバー（不確定モード：流れる帯）-->
+                <ProgressBar x:Name="progress_bar"
+                             Height="6"
+                             IsIndeterminate="True"
+                             Foreground="#3457D5"
+                             Background="#EEF3FD"
+                             BorderThickness="0"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

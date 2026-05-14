@@ -1,0 +1,68 @@
+<Window x:Class="EA_CostManager.Views.ProjectEditDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="現場情報の編集"
+        Width="460" Height="470"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <Style x:Key="LabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#333"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="InputStyle" TargetType="TextBox">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="6,5"/>
+            <Setter Property="BorderBrush" Value="#CCCCCC"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+
+            <!-- ▼▼▼ 追加⑤：区分コード編集フィールド ▼▼▼ -->
+            <!-- 例：「EA94」「RD24」などのカテゴリコード部分を編集可能にする -->
+            <TextBlock Text="区分コード *" Style="{StaticResource LabelStyle}"/>
+            <TextBox x:Name="txt_category_code" Style="{StaticResource InputStyle}"
+                     ToolTip="例：EA94、RD24　※変更すると集計データの紐付けも変わります"/>
+
+            <!-- 区分コード変更時の注意書き -->
+            <Border Background="#FFF8E7" BorderBrush="#F0C040" BorderThickness="1"
+                    CornerRadius="3" Padding="8,5" Margin="0,-6,0,12">
+                <TextBlock Text="⚠ 区分コードを変更すると、集計データの現場紐付けも変わります。"
+                           FontSize="10" Foreground="#B8860B" TextWrapping="Wrap"/>
+            </Border>
+
+            <TextBlock Text="現場名 *" Style="{StaticResource LabelStyle}"/>
+            <TextBox x:Name="txt_site_name" Style="{StaticResource InputStyle}"/>
+
+            <TextBlock Text="詳細（任意）" Style="{StaticResource LabelStyle}"/>
+            <TextBox x:Name="txt_detail" Style="{StaticResource InputStyle}"
+                     Height="80" TextWrapping="Wrap" AcceptsReturn="True"
+                     VerticalScrollBarVisibility="Auto"/>
+
+            <TextBlock x:Name="txt_error" Foreground="Red" FontSize="11"
+                       Margin="0,4,0,0" TextWrapping="Wrap"
+                       Visibility="Collapsed"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="キャンセル" Width="90" Padding="0,7"
+                    Margin="0,0,8,0" Click="btn_cancel_Click"/>
+            <Button Content="保存する" Width="90" Padding="0,7"
+                    Background="#2E75B6" Foreground="White"
+                    Click="btn_save_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,261 @@
+<UserControl x:Class="EA_CostManager.Views.ErrorLogPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:EA_CostManager.ViewModels">
+
+    <!--
+        ■ ErrorLogPage - Sprint 5D: エラーログ参照画面
+        ■ リソース名はSettingsPage.xamlに合わせて統一
+          brush_accent / #F0F4F8 / #1A3A5C / #CCDDF0
+    -->
+
+    <UserControl.DataContext>
+        <vm:ErrorLogViewModel />
+    </UserControl.DataContext>
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <!-- タイトルバー -->
+            <RowDefinition Height="Auto" />
+            <!-- ユーザーカード一覧 -->
+            <RowDefinition Height="*"    />
+            <!-- ログ DataGrid -->
+            <RowDefinition Height="4"    />
+            <!-- ローディングバー -->
+        </Grid.RowDefinitions>
+
+        <!-- ══════════════════════════════════════════════════
+             Row 0: タイトルバー
+        ══════════════════════════════════════════════════ -->
+        <DockPanel Grid.Row="0" Margin="24,16,24,8">
+            <TextBlock Text="エラーログ参照"
+                       FontSize="15" FontWeight="Bold"
+                       Foreground="{DynamicResource brush_accent}"
+                       VerticalAlignment="Center" />
+            <Button Content="🔄 更新"
+                    Command="{Binding refresh_command}"
+                    HorizontalAlignment="Right"
+                    Background="{DynamicResource brush_accent}"
+                    Foreground="White"
+                    FontSize="12" Padding="12,4"
+                    BorderThickness="0" Cursor="Hand" />
+        </DockPanel>
+
+        <!-- ══════════════════════════════════════════════════
+             Row 1: ユーザーカード一覧
+        ══════════════════════════════════════════════════ -->
+        <Border Grid.Row="1"
+                Margin="24,0,24,8"
+                Padding="16,14"
+                CornerRadius="6"
+                Background="#F0F4F8"
+                BorderBrush="#CCDDF0"
+                BorderThickness="1">
+            <StackPanel>
+
+                <!-- セクションラベル -->
+                <TextBlock Text="PCユーザー一覧（クリックでログを確認）"
+                           FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource brush_accent}"
+                           Margin="0,0,0,10" />
+
+                <!-- エラーログが0件のとき表示 -->
+                <TextBlock Text="エラーログはまだ記録されていません"
+                           FontSize="12" FontStyle="Italic"
+                           Foreground="#888">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding has_users}" Value="False">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <!-- ユーザーカード群（横スクロール対応） -->
+                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Disabled"
+                              Visibility="{Binding has_users, Converter={StaticResource BoolToVis}}">
+                    <ItemsControl ItemsSource="{Binding user_cards}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+
+                                <!-- ── ユーザーカード1枚 ── -->
+                                <Border Width="170" MinHeight="100"
+                                        Margin="0,0,10,10"
+                                        Padding="14,12"
+                                        CornerRadius="6"
+                                        Cursor="Hand">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background"     Value="White" />
+                                            <Setter Property="BorderThickness" Value="1.5" />
+                                            <Setter Property="BorderBrush"    Value="#CCDDF0" />
+                                            <Style.Triggers>
+                                                <!-- 選択中：アクセントカラーのボーダー -->
+                                                <DataTrigger Binding="{Binding is_selected}" Value="True">
+                                                    <Setter Property="BorderBrush"
+                                                            Value="{DynamicResource brush_accent}" />
+                                                    <Setter Property="Background" Value="#EAF4FF" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+
+                                    <!-- クリックでユーザー選択 -->
+                                    <Border.InputBindings>
+                                        <MouseBinding
+                                            MouseAction="LeftClick"
+                                            Command="{Binding DataContext.select_user_command,
+                                                RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}" />
+                                    </Border.InputBindings>
+
+                                    <StackPanel>
+                                        <!-- ユーザー名 -->
+                                        <TextBlock Text="{Binding user_name}"
+                                                   FontWeight="Bold" FontSize="13"
+                                                   Foreground="#1A3A5C"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Margin="0,0,0,4" />
+
+                                        <!-- 合計エラー件数 -->
+                                        <TextBlock FontSize="11" Foreground="#555">
+                                            <Run Text="合計 " />
+                                            <Run Text="{Binding total_count}" FontWeight="SemiBold" />
+                                            <Run Text=" 件" />
+                                        </TextBlock>
+
+                                        <!-- ⚠ 未処理例外件数（0件のとき非表示） -->
+                                        <Border Background="#FDECEA" CornerRadius="3"
+                                                Padding="6,2" Margin="0,4,0,0"
+                                                Visibility="{Binding has_unhandled,
+                                                    Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="{Binding unhandled_badge}"
+                                                       FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="#C62828" />
+                                        </Border>
+
+                                        <!-- 最終エラー発生日時 -->
+                                        <TextBlock Text="{Binding last_occurred_at,
+                                                       StringFormat='最終: {0}'}"
+                                                   FontSize="10" Foreground="#888"
+                                                   Margin="0,6,0,0"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </Border>
+
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
+
+        <!-- ══════════════════════════════════════════════════
+             Row 2: ログ一覧（DataGrid）
+        ══════════════════════════════════════════════════ -->
+        <Border Grid.Row="2"
+                Margin="24,0,24,4"
+                Padding="16,14"
+                CornerRadius="6"
+                Background="#F0F4F8"
+                BorderBrush="#CCDDF0"
+                BorderThickness="1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- ログセクションタイトル -->
+                <TextBlock Grid.Row="0"
+                           Text="{Binding log_title}"
+                           FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource brush_accent}"
+                           Margin="0,0,0,8" />
+
+                <!-- ログ DataGrid -->
+                <DataGrid Grid.Row="1"
+                          ItemsSource="{Binding log_list}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          CanUserResizeRows="False"
+                          CanUserReorderColumns="False"
+                          HeadersVisibility="Column"
+                          GridLinesVisibility="Horizontal"
+                          HorizontalGridLinesBrush="#DDDDDD"
+                          SelectionMode="Single"
+                          RowHeight="32"
+                          FontSize="12"
+                          Background="White"
+                          BorderThickness="1"
+                          BorderBrush="#CCCCCC"
+                          VerticalScrollBarVisibility="Auto">
+
+                    <!-- ── 行の色分け ── -->
+                    <DataGrid.RowStyle>
+                        <Style TargetType="DataGridRow">
+                            <Style.Triggers>
+                                <!--
+                                    caught（明示catchで記録）→ 赤字
+                                    yori指示：「未処理例外以外は赤字で」
+                                -->
+                                <DataTrigger Binding="{Binding error_type}" Value="caught">
+                                    <Setter Property="Foreground" Value="#C62828" />
+                                    <Setter Property="FontWeight"  Value="Normal" />
+                                </DataTrigger>
+                                <!--
+                                    unhandled（未処理例外）→ デフォルト色 + 太字
+                                -->
+                                <DataTrigger Binding="{Binding error_type}" Value="unhandled">
+                                    <Setter Property="Foreground" Value="#1A3A5C" />
+                                    <Setter Property="FontWeight"  Value="SemiBold" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.RowStyle>
+
+                    <!-- ── 列定義 ── -->
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="発生日時"
+                                            Binding="{Binding occurred_at}"
+                                            Width="145" />
+                        <DataGridTextColumn Header="種別"
+                                            Binding="{Binding error_type}"
+                                            Width="90" />
+                        <DataGridTextColumn Header="発生箇所"
+                                            Binding="{Binding source}"
+                                            Width="230" />
+                        <DataGridTextColumn Header="メッセージ"
+                                            Binding="{Binding message}"
+                                            Width="*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+
+        <!-- ══════════════════════════════════════════════════
+             Row 3: ローディングバー（4px・他ページと統一）
+        ══════════════════════════════════════════════════ -->
+        <ProgressBar Grid.Row="3"
+                     IsIndeterminate="True"
+                     Height="4"
+                     VerticalAlignment="Stretch"
+                     Foreground="{DynamicResource brush_accent}"
+                     Visibility="{Binding is_loading, Converter={StaticResource BoolToVis}}" />
+    </Grid>
+</UserControl>

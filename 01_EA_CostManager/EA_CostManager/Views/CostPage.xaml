@@ -1,0 +1,1056 @@
+<UserControl x:Class="EA_CostManager.Views.CostPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:EA_CostManager.Converters">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter  x:Key="BoolToVis"/>
+        <conv:StringToColorBrushConverter x:Key="ColorBrush"/>
+
+        <!-- DataGrid ヘッダースタイル -->
+        <Style x:Key="ColHeader" TargetType="DataGridColumnHeader">
+            <Setter Property="Background"        Value="{DynamicResource brush_accent}"/>
+            <Setter Property="Foreground"        Value="White"/>
+            <Setter Property="FontWeight"        Value="Bold"/>
+            <Setter Property="FontSize"          Value="11"/>
+            <Setter Property="Padding"           Value="6,5"/>
+            <Setter Property="BorderBrush"       Value="#1A5C99"/>
+            <Setter Property="BorderThickness"   Value="0,0,1,1"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- DataGrid セルスタイル（枠線付き） -->
+        <Style x:Key="CellStyle" TargetType="DataGridCell">
+            <Setter Property="BorderBrush"     Value="#CCDDEE"/>
+            <Setter Property="BorderThickness" Value="0,0,1,0"/>
+            <Setter Property="Padding"         Value="4,3"/>
+            <Setter Property="FontSize"        Value="11"/>
+            <Style.Triggers>
+                <!-- ヘッダー行・小計行はセル縦線を非表示 -->
+                <DataTrigger Binding="{Binding is_header}"   Value="True">
+                    <Setter Property="BorderBrush" Value="Transparent"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding is_subtotal}" Value="True">
+                    <Setter Property="BorderBrush" Value="Transparent"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 折り返しテキストセル用テンプレート -->
+        <DataTemplate x:Key="WrapTextTemplate">
+            <TextBlock Text="{Binding}"
+                       TextWrapping="Wrap"
+                       FontSize="11"
+                       Padding="4,3"/>
+        </DataTemplate>
+
+        <!-- ▼▼▼ 追加：列ヘッダーフィルターTextBoxスタイル ▼▼▼ -->
+        <!-- ▼▼▼ 追加：列ヘッダーフィルターComboBoxスタイル（技師・助手氏名用）▼▼▼ -->
+        <Style x:Key="ColFilterCombo" TargetType="ComboBox">
+            <Setter Property="FontSize"       Value="10"/>
+            <Setter Property="FontWeight"     Value="Normal"/>
+            <Setter Property="Background"     Value="White"/>
+            <Setter Property="BorderBrush"    Value="#9DC4E8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Height"         Value="20"/>
+            <Setter Property="Margin"         Value="0,3,0,0"/>
+            <Setter Property="Foreground"     Value="#333"/>
+            <Setter Property="Padding"        Value="2,0"/>
+        </Style>
+        <Style x:Key="ColFilterBox" TargetType="TextBox">
+            <Setter Property="FontSize"       Value="10"/>
+            <Setter Property="FontWeight"     Value="Normal"/>
+            <Setter Property="Foreground"     Value="#333"/>
+            <Setter Property="Background"     Value="#E8F4FF"/>
+            <Setter Property="BorderBrush"    Value="#9DC4E8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"        Value="3,2"/>
+            <Setter Property="Height"         Value="20"/>
+            <Setter Property="Margin"         Value="0,3,0,0"/>
+        </Style>
+
+        <!-- ▼▼▼ 追加：▽ボタンのみのComboBoxスタイル（技師・助手氏名列フィルター用）▼▼▼ -->
+        <!-- テキストの横に▽だけ表示 → クリックでドロップダウン展開 -->
+        <Style x:Key="ColFilterArrow" TargetType="ComboBox">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <!-- ▼ トグルボタン本体（Excelフィルターボタン風） -->
+                            <ToggleButton x:Name="ToggleButton"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay,
+                                                      RelativeSource={RelativeSource TemplatedParent}}"
+                                          Background="White"
+                                          BorderBrush="#9DC4E8"
+                                          BorderThickness="1"
+                                          Cursor="Hand"
+                                          Width="18" Height="14"
+                                          Padding="0">
+                                <TextBlock x:Name="ArrowText"
+                                           Text="▼" FontSize="8" FontWeight="Bold"
+                                           Foreground="{DynamicResource brush_accent}" VerticalAlignment="Center"
+                                           HorizontalAlignment="Center"/>
+                            </ToggleButton>
+                            <!-- ドロップダウンポップアップ -->
+                            <Popup x:Name="Popup"
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Slide">
+                                <Border Background="White"
+                                        BorderBrush="#9DC4E8"
+                                        BorderThickness="1"
+                                        MaxHeight="220"
+                                        MinWidth="120">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Disabled">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <!-- 開いているとき▲に変更 -->
+                        <ControlTemplate.Triggers>
+                            <!-- 展開中：背景を青にして反転表示 -->
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="ToggleButton" Property="Background" Value="{DynamicResource brush_accent}"/>
+                                <Setter TargetName="ToggleButton" Property="BorderBrush" Value="#1A5C99"/>
+                                <Setter TargetName="ArrowText" Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="FontSize"   Value="11"/>
+                        <Setter Property="FontWeight" Value="Normal"/>
+                        <Setter Property="Padding"    Value="10,5"/>
+                        <Setter Property="Foreground" Value="#333"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter Property="Background" Value="#DDEEFF"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ===== ヘッダーバー ===== -->
+        <Border Grid.Row="0" Background="{DynamicResource brush_accent}" Padding="16,10">
+            <DockPanel>
+                <!-- ▼▼▼ 現場タブ検索欄：DockPanel.Dock="Right"でTextBlockより先に宣言→完全右端 ▼▼▼ -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="🔍" FontSize="13" Foreground="White"
+                               VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <ComboBox x:Name="tab_search_box"
+                              Width="220"
+                              IsEditable="True"
+                              Text="{Binding tab_search_text, UpdateSourceTrigger=PropertyChanged}"
+                              ItemsSource="{Binding search_suggestions}"
+                              StaysOpenOnEdit="True"
+                              DropDownOpened="tab_search_box_DropDownOpened"
+                              KeyUp="tab_search_box_KeyUp"
+                              SelectionChanged="tab_search_box_SelectionChanged"
+                              Background="White"
+                              FontSize="12"
+                              VerticalContentAlignment="Center">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Rectangle Width="{DynamicResource tab_color_bar_width}"
+                                               Height="12" RadiusX="2" RadiusY="2"
+                                               Fill="{Binding tab_color, Converter={StaticResource ColorBrush}}"
+                                               VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock Text="{Binding tab_name}" FontSize="12"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- タイトルはRightより後に宣言することで残りのスペースを使う -->
+                <TextBlock DockPanel.Dock="Left"
+                           Text="原価集計"
+                           Foreground="White" FontSize="18" FontWeight="Bold"
+                           VerticalAlignment="Center"/>
+            </DockPanel>
+        </Border>
+
+        <!-- ===== ステータスバー ===== -->
+        <Border Grid.Row="1" Background="#F0F4F8" Padding="16,5"
+                BorderThickness="0,0,0,1" BorderBrush="#DDEEFF">
+            <TextBlock Text="{Binding status_message}"
+                       FontSize="12" Foreground="#444"/>
+        </Border>
+
+        <!-- ===== メインコンテンツ ===== -->
+        <Grid Grid.Row="2">
+
+            <!-- ===== 現場タブ（大区分フィルタ済み）===== -->
+            <!-- ▼▼▼ 修正：TabControlのスクロールを完全に止める ▼▼▼ -->
+            <!-- TabControlのテンプレートを上書きしてScrollViewerのスクロールを無効化 -->
+            <!-- ScrollViewer.HorizontalScrollBarVisibility="Disabled" でタブが動かなくなる -->
+            <TabControl x:Name="project_tab_control"
+                        ItemsSource="{Binding filtered_tabs}"
+                        SelectedItem="{Binding selected_tab}"
+                        IsSynchronizedWithCurrentItem="False"
+                        SelectionChanged="project_tab_selection_changed">
+
+                <!-- ▼▼▼ 追加：選択タブの拡大制御（詳細設定の tab_enlarge_on_select に連動） ▼▼▼ -->
+                <!-- tab_item_selected_margin は UserSettingsManager.apply_immediate で動的に設定 -->
+                <!-- ★v0.9.7追加：複数選択時のハイライト表示・PreviewMouseLeftButtonDownハンドラー登録 -->
+                <TabControl.ItemContainerStyle>
+                    <Style TargetType="TabItem">
+                        <!-- マウスダウンイベント：Ctrl+クリック / Shift+クリック判定をコードビハインドで処理 -->
+                        <EventSetter Event="PreviewMouseLeftButtonDown"
+                                     Handler="tab_item_PreviewMouseLeftButtonDown"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Margin" Value="{DynamicResource tab_item_selected_margin}"/>
+                            </Trigger>
+                            <!-- ★v0.9.7追加：複数選択中のタブをハイライト表示（薄い水色背景） -->
+                            <DataTrigger Binding="{Binding is_multi_selected}" Value="True">
+                                <Setter Property="Background" Value="#B3E5FC"/>
+                                <Setter Property="BorderBrush" Value="#0288D1"/>
+                                <Setter Property="BorderThickness" Value="2"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TabControl.ItemContainerStyle>
+
+                <TabControl.Template>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid KeyboardNavigation.TabNavigation="Local">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <!-- ▼▼▼ タブヘッダーエリア：3段制限(MaxHeight=90) + スクロール + 展開ボタン ▼▼▼ -->
+                            <!-- ScrollViewer で3段を超えたタブをスクロール可能にする -->
+                            <!-- tab_expand_border クリックで全展開 / 折りたたみをcode-behindで切り替え -->
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="24"/>
+                                </Grid.ColumnDefinitions>
+                                <ScrollViewer Grid.Column="0"
+                                              x:Name="tab_header_scroll"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled"
+                                              MaxHeight="90">
+                                    <!-- Grid.IsSharedSizeScope="True"：全タブ幅を最長タブ幅に自動統一 -->
+                                    <WrapPanel x:Name="HeaderPanel"
+                                               IsItemsHost="True"
+                                               KeyboardNavigation.TabIndex="1"
+                                               Background="Transparent"
+                                               Orientation="Horizontal"
+                                               Grid.IsSharedSizeScope="True"/>
+                                </ScrollViewer>
+                                <!-- ▼/▲ 展開ボタン：code-behind の tab_expand_border_click でハンドル -->
+                                <Border Grid.Column="1"
+                                        x:Name="tab_expand_border"
+                                        Background="{DynamicResource brush_accent}"
+                                        Cursor="Hand"
+                                        ToolTip="タブ一覧を展開 / 折りたたむ">
+                                    <TextBlock x:Name="tab_expand_icon"
+                                               Text="▼"
+                                               Foreground="White"
+                                               FontSize="9"
+                                               FontWeight="Bold"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Bottom"
+                                               Margin="0,0,0,4"/>
+                                </Border>
+                            </Grid>
+                            <!-- タブコンテンツ部分 -->
+                            <Border Grid.Row="1"
+                                    x:Name="ContentPanel"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    Background="{TemplateBinding Background}"
+                                    KeyboardNavigation.TabNavigation="Local"
+                                    KeyboardNavigation.DirectionalNavigation="Contained"
+                                    KeyboardNavigation.TabIndex="2">
+                                <ContentPresenter x:Name="PART_SelectedContentHost"
+                                                  ContentSource="SelectedContent"
+                                                  Margin="{TemplateBinding Padding}"
+                                                  SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </TabControl.Template>
+
+                <!-- タブヘッダー -->
+                <TabControl.ItemTemplate>
+                    <DataTemplate>
+                        <!-- ▼▼▼ SharedSizeGroup：全タブ幅を最長タブ幅に自動統一 ▼▼▼ -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition SharedSizeGroup="TabHeaderWidth"/>
+                            </Grid.ColumnDefinitions>
+                            <!-- ▼▼▼ 追加：現場タブの右クリックメニュー ▼▼▼ -->
+                            <StackPanel Orientation="Horizontal" Margin="2,2,2,0">
+                                <StackPanel.ContextMenu>
+                                    <!-- ★v0.9.7追加：Openedイベントで複数選択時のメニュー表示を動的制御 -->
+                                    <ContextMenu Opened="tab_context_menu_Opened">
+                                        <MenuItem Header="属性変更" Tag="change_attribute">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="🎨" FontSize="11"/>
+                                            </MenuItem.Icon>
+                                            <!-- ▼▼▼ 修正：属性サブメニュー ▼▼▼ -->
+                                            <MenuItem Header="契約前"   Tag="attr_契約前"   Click="project_tab_menu_Click"/>
+                                            <MenuItem Header="契約済" Tag="attr_契約済" Click="project_tab_menu_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="自社案件" Tag="attr_自社案件" Click="project_tab_menu_Click"/>
+                                            <MenuItem Header="第一土木" Tag="attr_第一土木" Click="project_tab_menu_Click"/>
+                                            <MenuItem Header="セミナー" Tag="attr_セミナー" Click="project_tab_menu_Click"/>
+                                            <MenuItem Header="追加"     Tag="attr_追加"     Click="project_tab_menu_Click"/>
+                                            <MenuItem Header="その他"   Tag="attr_その他"   Click="project_tab_menu_Click"/>
+                                        </MenuItem>
+                                        <MenuItem Header="現場名・詳細を編集"
+                                              Tag="edit_project"
+                                              Click="project_tab_menu_Click">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="✏️" FontSize="11"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <Separator/>
+                                        <MenuItem Header="アーカイブ（非表示にする）"
+                                              Tag="archive_project"
+                                              Click="project_tab_menu_Click">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="📦" FontSize="11"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+
+                                        <!-- ▼▼▼ ★v0.9.7追加：複数選択時の一括操作メニュー ▼▼▼ -->
+                                        <!-- _multi_selected_tabs.Count > 1 のときだけ表示する -->
+                                        <!-- Visibility・Headerは code-behind の tab_context_menu_Opened で動的に切替する -->
+                                        <Separator x:Name="bulk_separator" Visibility="Collapsed"/>
+                                        <MenuItem x:Name="bulk_attribute_menu"
+                                                  Header="選択中の0件の属性を一括変更"
+                                                  Tag="bulk_change_attribute"
+                                                  Visibility="Collapsed"
+                                                  Click="project_tab_menu_Click">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="🎨" FontSize="11"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                        <MenuItem x:Name="bulk_archive_menu"
+                                                  Header="選択中の0件をアーカイブ"
+                                                  Tag="bulk_archive"
+                                                  Visibility="Collapsed"
+                                                  Click="project_tab_menu_Click">
+                                            <MenuItem.Icon>
+                                                <TextBlock Text="📦" FontSize="11"/>
+                                            </MenuItem.Icon>
+                                        </MenuItem>
+                                    </ContextMenu>
+                                </StackPanel.ContextMenu>
+                                <!-- ▼▼▼ 削除：番号バッジ（不要のため削除） ▼▼▼ -->
+                                <!-- ▼▼▼ 修正：色帯の幅をApplicationリソースからバインド（詳細設定で即時変更可能） ▼▼▼ -->
+                                <Rectangle Width="{DynamicResource tab_color_bar_width}"
+                                       Height="14" RadiusX="2" RadiusY="2"
+                                       Fill="{Binding tab_color, Converter={StaticResource ColorBrush}}"
+                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <TextBlock Text="{Binding tab_name}"
+                                       VerticalAlignment="Center" FontSize="12"/>
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </TabControl.ItemTemplate>
+
+                <!-- タブコンテンツ -->
+                <TabControl.ContentTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- 現場情報バー -->
+                            <Border Grid.Row="0" Background="#EEF4FB" Padding="10,6"
+                                    BorderThickness="0,0,0,1" BorderBrush="#CCDDF0">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                                        <TextBlock FontWeight="Bold" FontSize="13" Margin="0,0,10,0"
+                                                   Text="{Binding category_code}"/>
+                                        <TextBlock FontSize="13" Margin="0,0,10,0"
+                                                   Text="{Binding site_name}"/>
+                                        <TextBlock FontSize="12" Foreground="#666"
+                                                   Text="{Binding company_name}"/>
+                                        <!-- ▼▼▼ 修正：TextBlock.Textで詳細表示（Runバインド廃止） ▼▼▼ -->
+                                        <TextBlock FontSize="12" Foreground="#444" Margin="10,0,0,0"
+                                                   Text="{Binding detail, Mode=OneWay, StringFormat='詳細：{0}'}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding detail, Mode=OneWay}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding detail, Mode=OneWay}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="読み込み中..." FontSize="12" Foreground="#999"
+                                                   Margin="16,0,0,0"
+                                                   Visibility="{Binding is_loading, Converter={StaticResource BoolToVis}}"/>
+                                        <!-- ▼▼▼ 追加：単価変更適用中アナウンス ▼▼▼ -->
+                                        <TextBlock Text="{Binding custom_rate_banner_text}"
+                                                   FontSize="11" FontWeight="Bold"
+                                                   Foreground="#C0392B" Margin="12,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   Tag="no_print"
+                                                   Visibility="{Binding show_custom_rate_banner, Converter={StaticResource BoolToVis}}"/>
+                                    </StackPanel>
+                                    <!-- ▼▼▼ 修正：ボタン順序 右から（絞り込み → 単価変更）隙間あり ▼▼▼ -->
+                                    <!-- ▼▼▼ 追加：全文検索ボックス（印刷の右＝最右端）▼▼▼ -->
+                                    <StackPanel DockPanel.Dock="Right"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Center"
+                                                Margin="0,0,0,0">
+                                        <TextBlock Text="🔍" FontSize="11"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="#7799BB" Margin="0,0,3,0"/>
+                                        <TextBox Width="160" Height="22" FontSize="11"
+                                                 Padding="4,2" VerticalContentAlignment="Center"
+                                                 Text="{Binding selected_display_tab.search_text,
+                                                         UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="作業内容・技師氏名・助手氏名を一括検索（OR検索）"/>
+                                        <Button Content="✕"
+                                                Height="22" Padding="6,0" Margin="2,0,8,0"
+                                                FontSize="10" Cursor="Hand"
+                                                Background="#CC4444" Foreground="White"
+                                                BorderThickness="0"
+                                                Click="btn_clear_search_Click"
+                                                ToolTip="全文検索・列フィルターをすべてクリア"/>
+                                    </StackPanel>
+                                    <!-- ▼▼▼ 追加：印刷ボタン（検索の左）▼▼▼ -->
+                                    <Button DockPanel.Dock="Right"
+                                            Content="🖨 印刷"
+                                            Tag="{Binding}"
+                                            Click="btn_print_Click"
+                                            Background="#34495E" Foreground="White"
+                                            FontSize="11" Padding="8,4"
+                                            Margin="0,0,0,0"
+                                            HorizontalAlignment="Right"
+                                            Cursor="Hand"
+                                            ToolTip="印刷ダイアログを開く (Ctrl+P)"/>
+                                    <!-- ▼▼▼ 追加：Excel書き出しボタン（印刷の左） ▼▼▼ -->
+                                    <Button DockPanel.Dock="Right"
+                                            Content="📊 Excel"
+                                            Tag="{Binding}"
+                                            Click="btn_excel_export_Click"
+                                            Background="#1D6F42" Foreground="White"
+                                            FontSize="11" Padding="8,4"
+                                            Margin="0,0,10,0"
+                                            HorizontalAlignment="Right"
+                                            Cursor="Hand"
+                                            ToolTip="Excel出力ダイアログを開く (Ctrl+E)"/>
+                                    <!-- 絞り込みタブ追加ボタン -->
+                                    <Button DockPanel.Dock="Right"
+                                            Content="＋ 絞り込みタブ追加"
+                                            x:Name="btn_add_filter"
+                                            Tag="{Binding}"
+                                            Click="btn_add_filter_Click"
+                                            Background="{DynamicResource brush_accent}" Foreground="White"
+                                            FontSize="11" Padding="8,4"
+                                            Margin="0,0,10,0"
+                                            HorizontalAlignment="Right"
+                                            Cursor="Hand"
+                                            ToolTip="絞り込みタブを追加 (Ctrl+N)"/>
+                                    <!-- 人員単価変更ボタン（絞り込みの左・隙間あり） -->
+                                    <Button DockPanel.Dock="Right"
+                                            Content="💴 人員単価を変更"
+                                            Tag="{Binding}"
+                                            Click="btn_change_rates_Click"
+                                            Background="#8E44AD" Foreground="White"
+                                            FontSize="11" Padding="8,4"
+                                            Margin="0,0,10,0"
+                                            HorizontalAlignment="Right"
+                                            Cursor="Hand"
+                                            ToolTip="選択中タブの技師・助手・個人別単価を設定する (Ctrl+U)"/>
+                                    <!-- ▼▼▼ 追加：🔄 更新ボタン（他ユーザーの変更を手動反映）▼▼▼ -->
+                                    <!-- 人員単価変更の左・折りたたみボタン群の右に配置 -->
+                                    <Button DockPanel.Dock="Right"
+                                            Content="🔄"
+                                            Tag="{Binding}"
+                                            Click="btn_refresh_costpage_Click"
+                                            Background="Transparent"
+                                            BorderBrush="{DynamicResource brush_accent}"
+                                            BorderThickness="1"
+                                            Foreground="{DynamicResource brush_accent}"
+                                            FontSize="13" Padding="7,3"
+                                            Margin="0,0,8,0"
+                                            Cursor="Hand"
+                                            ToolTip="他ユーザーの変更をこの現場に反映する (Ctrl+R)"/>
+                                    <!-- ▼▼▼ 追加：年度全折/全展トグルボタン（月度ボタンの左） ▼▼▼ -->
+                                    <Button DockPanel.Dock="Right"
+                                            Tag="{Binding}"
+                                            Click="btn_toggle_all_years_Click"
+                                            FontSize="11" Padding="8,4"
+                                            Margin="0,0,4,0"
+                                            HorizontalAlignment="Right"
+                                            Cursor="Hand"
+                                            BorderThickness="0"
+                                            ToolTip="全年度を折りたたむ / 展開する (Ctrl+Shift+M)">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Content"    Value="▶ 年度を折りたたむ"/>
+                                                <Setter Property="Background" Value="#5D6D7E"/>
+                                                <Setter Property="Foreground" Value="White"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding selected_display_tab.is_all_years_collapsed}" Value="True">
+                                                        <Setter Property="Content"    Value="▼ 年度を展開する"/>
+                                                        <Setter Property="Background" Value="#1A3A5C"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                    <!-- ▼▼▼ 既存：月度全折/全展トグルボタン ▼▼▼ -->
+                                    <Button DockPanel.Dock="Right"
+                                            Tag="{Binding}"
+                                            Click="btn_toggle_all_Click"
+                                            FontSize="11" Padding="8,4"
+                                            Margin="0,0,6,0"
+                                            HorizontalAlignment="Right"
+                                            Cursor="Hand"
+                                            BorderThickness="0"
+                                            ToolTip="全月度を折りたたむ / 展開する (Ctrl+M)">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Content"    Value="▶▶ 月度を折りたたむ"/>
+                                                <Setter Property="Background" Value="#5D6D7E"/>
+                                                <Setter Property="Foreground" Value="White"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding selected_display_tab.is_all_collapsed}" Value="True">
+                                                        <Setter Property="Content"    Value="▼▼ 月度を展開する"/>
+                                                        <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- 内部タブ（全件 + 絞り込みタブ） -->
+                            <TabControl x:Name="inner_filter_tab_control"
+                                        Grid.Row="1"
+                                        Background="White"
+                                        BorderThickness="0"
+                                        SelectedIndex="0"
+                                        SelectedItem="{Binding selected_display_tab, Mode=TwoWay}"
+                                        SelectionChanged="filter_tab_selection_changed"
+                                        ItemsSource="{Binding display_tabs}">
+                                <TabControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <!-- ▼▼▼ 修正：タブ名＋ⓘボタンを横並びにするStackPanel ▼▼▼ -->
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+
+                                            <!-- タブ名（右クリックメニュー付き） -->
+                                            <TextBlock Text="{Binding tab_name}" FontSize="12"
+                                                       VerticalAlignment="Center">
+                                                <TextBlock.ContextMenu>
+                                                    <ContextMenu>
+                                                        <!-- ▼▼▼ 追加：タブ名変更（Sprint 3.7） ▼▼▼ -->
+                                                        <MenuItem Header="タブ名を変更"
+                                                              Tag="rename"
+                                                              Click="filter_tab_menu_Click">
+                                                            <MenuItem.Style>
+                                                                <Style TargetType="MenuItem">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding filter_tab_id}" Value="0">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </MenuItem.Style>
+                                                        </MenuItem>
+                                                        <MenuItem Header="アーカイブ（非表示にする）"
+                                                              CommandParameter="{Binding}"
+                                                              Tag="archive"
+                                                              Click="filter_tab_menu_Click">
+                                                            <MenuItem.Style>
+                                                                <Style TargetType="MenuItem">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding filter_tab_id}" Value="0">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </MenuItem.Style>
+                                                        </MenuItem>
+                                                        <MenuItem Header="削除（完全に消去する）"
+                                                              CommandParameter="{Binding}"
+                                                              Tag="delete"
+                                                              Click="filter_tab_menu_Click">
+                                                            <MenuItem.Style>
+                                                                <Style TargetType="MenuItem">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding filter_tab_id}" Value="0">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </MenuItem.Style>
+                                                        </MenuItem>
+                                                        <Separator>
+                                                            <Separator.Style>
+                                                                <Style TargetType="Separator">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding filter_tab_id}" Value="0">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Separator.Style>
+                                                        </Separator>
+                                                        <MenuItem Header="アーカイブ済みタブを表示"
+                                                              Tag="show_archived"
+                                                              Click="filter_tab_menu_Click"/>
+                                                    </ContextMenu>
+                                                </TextBlock.ContextMenu>
+                                            </TextBlock>
+
+                                            <!-- ▼▼▼ 追加：絞り込み条件表示ボタン（全件タブは非表示） ▼▼▼ -->
+                                            <TextBlock Text="ⓘ"
+                                                    FontSize="12"
+                                                    Margin="4,0,0,0"
+                                                    VerticalAlignment="Center"
+                                                    Foreground="{DynamicResource brush_accent}"
+                                                    Cursor="Help"
+                                                    ToolTipService.ShowDuration="30000"
+                                                    ToolTipService.InitialShowDelay="300">
+                                                <TextBlock.ToolTip>
+                                                    <ToolTip>
+                                                        <TextBlock Text="{Binding info_tooltip}"
+                                                                   FontSize="12"
+                                                                   FontFamily="メイリオ"
+                                                                   LineHeight="20"/>
+                                                    </ToolTip>
+                                                </TextBlock.ToolTip>
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding filter_tab_id}" Value="0">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding info_tooltip}" Value="">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </TabControl.ItemTemplate>
+                                <TabControl.ContentTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <!-- ▼▼▼ 修正：検索バー行削除（現場情報バーに移動）▼▼▼ -->
+                                                <!-- DataGrid -->
+                                                <RowDefinition Height="*"/>
+                                                <!-- 月次合計バー -->
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <!-- ▼▼▼ 削除：検索バーは現場情報バーに移動（印刷ボタンの左）▼▼▼ -->
+
+                                            <!-- 日次集計 DataGrid -->
+                                            <!-- ▼▼▼ 変更：ItemsSource を filtered_records に変更（ICollectionView）▼▼▼ -->
+                                            <DataGrid Grid.Row="0"
+                                                      ItemsSource="{Binding filtered_records}"
+                                                      AutoGenerateColumns="False"
+                                                      IsReadOnly="True"
+                                                      SelectionMode="Single"
+                                                      SelectionUnit="Cell"
+                                                      GridLinesVisibility="All"
+                                                      HorizontalGridLinesBrush="#CCDDEE"
+                                                      VerticalGridLinesBrush="#CCDDEE"
+                                                      HeadersVisibility="Column"
+                                                      ColumnHeaderStyle="{StaticResource ColHeader}"
+                                                      CellStyle="{StaticResource CellStyle}"
+                                                      FontSize="11"
+                                                      RowHeight="NaN"
+                                                      CanUserResizeRows="False"
+                                                      CanUserAddRows="False"
+                                                      EnableRowVirtualization="True">
+
+                                                <DataGrid.RowStyle>
+                                                    <Style TargetType="DataGridRow">
+                                                        <!-- ▼▼▼ 追加：ヘッダー行のマウスDown時に選択を強制解除 ▼▼▼ -->
+                                                        <!-- DataGridのPreviewMouseDown（選択処理）の後にDataGridRow側が受け取るため有効 -->
+                                                        <EventSetter Event="PreviewMouseLeftButtonDown"
+                                                                     Handler="header_row_PreviewMouseDown"/>
+                                                        <!-- 通常行：交互背景 -->
+                                                        <Setter Property="Background" Value="White"/>
+                                                        <Style.Triggers>
+                                                            <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                                                                <Setter Property="Background" Value="#F7FAFD"/>
+                                                            </Trigger>
+                                                            <!-- 月度ヘッダー行：青背景・クリック可能（折り畳み用） -->
+                                                            <DataTrigger Binding="{Binding is_header}" Value="True">
+                                                                <Setter Property="Background" Value="{DynamicResource brush_accent}"/>
+                                                                <Setter Property="Cursor" Value="Hand"/>
+                                                            </DataTrigger>
+                                                            <!-- ▼▼▼ 追加：年ヘッダー行：濃い青背景・クリック可能 ▼▼▼ -->
+                                                            <DataTrigger Binding="{Binding is_year_header}" Value="True">
+                                                                <Setter Property="Background" Value="#1A3A5C"/>
+                                                                <Setter Property="Cursor"     Value="Hand"/>
+                                                                <Setter Property="FontSize"   Value="13"/>
+                                                                <Setter Property="FontWeight" Value="Bold"/>
+                                                            </DataTrigger>
+                                                            <!-- 小計行：青背景・クリック無効 -->
+                                                            <DataTrigger Binding="{Binding is_subtotal}" Value="True">
+                                                                <Setter Property="Background"       Value="#B8D4EE"/>
+                                                                <Setter Property="Focusable"        Value="False"/>
+                                                                <Setter Property="IsHitTestVisible" Value="False"/>
+                                                            </DataTrigger>
+                                                            <!-- ▼▼▼ 削除：is_hidden DataTrigger ▼▼▼ -->
+                                                            <!-- ICollectionView の filter_row() で制御するため DataTrigger は不要 -->
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </DataGrid.RowStyle>
+
+                                                <DataGrid.Columns>
+
+                                                    <!-- 作業日（折り畳みボタン付き） -->
+                                                    <DataGridTemplateColumn Header="作業日" Width="90" MinWidth="80">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <Grid>
+                                                                    <!-- ▼▼▼ 追加：年ヘッダー行：年折りたたみボタン ▼▼▼ -->
+                                                                    <Button Content="{Binding collapse_icon}"
+                                                                            Tag="{Binding}"
+                                                                            Click="btn_year_toggle_Click"
+                                                                            Background="Transparent"
+                                                                            BorderThickness="0"
+                                                                            Foreground="White"
+                                                                            FontSize="12"
+                                                                            FontWeight="Bold"
+                                                                            HorizontalAlignment="Left"
+                                                                            Padding="4,2"
+                                                                            Cursor="Hand">
+                                                                        <Button.Style>
+                                                                            <Style TargetType="Button">
+                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding is_year_header}" Value="True">
+                                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Button.Style>
+                                                                    </Button>
+                                                                    <!-- 月度ヘッダー行：折り畳みボタンを表示 -->
+                                                                    <Button Content="{Binding collapse_icon}"
+                                                                            Tag="{Binding}"
+                                                                            Click="btn_month_toggle_Click"
+                                                                            Background="Transparent"
+                                                                            BorderThickness="0"
+                                                                            Foreground="White"
+                                                                            FontSize="11"
+                                                                            HorizontalAlignment="Left"
+                                                                            Padding="4,2"
+                                                                            Cursor="Hand">
+                                                                        <Button.Style>
+                                                                            <Style TargetType="Button">
+                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding is_header}" Value="True">
+                                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Button.Style>
+                                                                    </Button>
+                                                                    <!-- 通常行・小計行：日付テキスト -->
+                                                                    <TextBlock Text="{Binding display_date}"
+                                                                               FontSize="11" Padding="4,3">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock">
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding is_header}" Value="True">
+                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    </DataTrigger>
+                                                                                    <DataTrigger Binding="{Binding is_year_header}" Value="True">
+                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+
+                                                    <!-- ▼▼▼ 変更：作業内容（ヘッダーはテキストのみ・TextBox削除）▼▼▼ -->
+                                                    <DataGridTemplateColumn Header="作業内容" Width="*" MinWidth="150">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding work_content}"
+                                                                           TextWrapping="Wrap"
+                                                                           FontSize="11" Padding="4,3">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding is_header}" Value="True">
+                                                                                    <Setter Property="Foreground" Value="White"/>
+                                                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                                                    <Setter Property="FontSize"   Value="12"/>
+                                                                                </DataTrigger>
+                                                                                <!-- ▼▼▼ 追加：年ヘッダースタイル ▼▼▼ -->
+                                                                                <DataTrigger Binding="{Binding is_year_header}" Value="True">
+                                                                                    <Setter Property="Foreground" Value="White"/>
+                                                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                                                    <Setter Property="FontSize"   Value="13"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding is_subtotal}" Value="True">
+                                                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                                                    <Setter Property="Foreground" Value="#1A4A7A"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+
+                                                    <!-- ▼▼▼ 変更：技師氏名（テキスト右に▼のみのフィルター）▼▼▼ -->
+                                                    <DataGridTemplateColumn Width="110" MinWidth="80">
+                                                        <DataGridTemplateColumn.HeaderTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal"
+                                                                            HorizontalAlignment="Center"
+                                                                            VerticalAlignment="Center">
+                                                                    <TextBlock Text="技師氏名" FontWeight="Bold"
+                                                                               Foreground="White" FontSize="11"
+                                                                               VerticalAlignment="Center"/>
+                                                                    <ComboBox Style="{StaticResource ColFilterArrow}"
+                                                                              Margin="4,0,0,0"
+                                                                              ItemsSource="{Binding DataContext.distinct_eng_names,
+                                                                                       RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                                              SelectedItem="{Binding DataContext.col_filter_eng,
+                                                                                       RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                                              ToolTip="▼で技師氏名を絞り込み"/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.HeaderTemplate>
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding engineer_names}"
+                                                                           TextWrapping="Wrap"
+                                                                           FontSize="11" Padding="4,3"/>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+
+                                                    <!-- ▼▼▼ 追加：技師人数列 ▼▼▼ -->
+                                                    <DataGridTextColumn Header="技師&#xa;人数"
+                                                        Binding="{Binding display_engineer_count}"
+                                                        Width="50" MinWidth="40"/>
+
+                                                    <DataGridTextColumn Header="技師&#xa;人工(日)"
+                                                        Binding="{Binding display_engineer_days}"
+                                                        Width="65" MinWidth="55"/>
+                                                    <DataGridTextColumn Header="技師&#xa;時間(h)"
+                                                        Binding="{Binding display_engineer_hours}"
+                                                        Width="65" MinWidth="55"/>
+                                                    <DataGridTextColumn Header="技師&#xa;人件費"
+                                                        Binding="{Binding display_engineer_cost}"
+                                                        Width="80" MinWidth="70"/>
+
+                                                    <!-- ▼▼▼ 変更：助手氏名（テキスト右に▼のみのフィルター）▼▼▼ -->
+                                                    <DataGridTemplateColumn Width="110" MinWidth="80">
+                                                        <DataGridTemplateColumn.HeaderTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal"
+                                                                            HorizontalAlignment="Center"
+                                                                            VerticalAlignment="Center">
+                                                                    <TextBlock Text="助手氏名" FontWeight="Bold"
+                                                                               Foreground="White" FontSize="11"
+                                                                               VerticalAlignment="Center"/>
+                                                                    <ComboBox Style="{StaticResource ColFilterArrow}"
+                                                                              Margin="4,0,0,0"
+                                                                              ItemsSource="{Binding DataContext.distinct_ast_names,
+                                                                                       RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                                              SelectedItem="{Binding DataContext.col_filter_ast,
+                                                                                       RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                                              ToolTip="▼で助手氏名を絞り込み"/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.HeaderTemplate>
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding assistant_names}"
+                                                                           TextWrapping="Wrap"
+                                                                           FontSize="11" Padding="4,3"/>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+
+                                                    <!-- ▼▼▼ 追加：助手人数列 ▼▼▼ -->
+                                                    <DataGridTextColumn Header="助手&#xa;人数"
+                                                        Binding="{Binding display_assistant_count}"
+                                                        Width="50" MinWidth="40"/>
+
+                                                    <DataGridTextColumn Header="助手&#xa;人工(日)"
+                                                        Binding="{Binding display_assistant_days}"
+                                                        Width="65" MinWidth="55"/>
+                                                    <DataGridTextColumn Header="助手&#xa;時間(h)"
+                                                        Binding="{Binding display_assistant_hours}"
+                                                        Width="65" MinWidth="55"/>
+                                                    <DataGridTextColumn Header="助手&#xa;人件費"
+                                                        Binding="{Binding display_assistant_cost}"
+                                                        Width="80" MinWidth="70"/>
+
+                                                    <DataGridTextColumn Header="合計&#xa;人工(日)"
+                                                        Binding="{Binding display_total_days_str}"
+                                                        Width="65" MinWidth="55"/>
+
+                                                    <DataGridTextColumn Header="人件費&#xa;合計"
+                                                        Binding="{Binding display_personnel_cost}"
+                                                        Width="80" MinWidth="70"/>
+
+                                                    <!-- 交通 -->
+                                                    <DataGridTextColumn Header="距離&#xa;(km往復)"
+                                                        Binding="{Binding display_distance}"
+                                                        Width="70" MinWidth="60"/>
+                                                    <DataGridTextColumn Header="台数"
+                                                        Binding="{Binding display_vehicle_count}"
+                                                        Width="45" MinWidth="40"/>
+                                                    <DataGridTextColumn Header="交通費"
+                                                        Binding="{Binding display_transport_cost}"
+                                                        Width="75" MinWidth="65"/>
+
+                                                    <!-- 損料 -->
+                                                    <DataGridTextColumn Header="使用数"
+                                                        Binding="{Binding display_equipment_qty}"
+                                                        Width="50" MinWidth="45"/>
+                                                    <DataGridTextColumn Header="損料"
+                                                        Binding="{Binding display_equipment_cost}"
+                                                        Width="75" MinWidth="65"/>
+
+                                                    <DataGridTemplateColumn Header="機材・使用者" Width="180" MinWidth="120">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding display_equipment_detail}"
+                                                                           TextWrapping="Wrap"
+                                                                           FontSize="11" Padding="4,3"/>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+
+                                                    <!-- 合計 -->
+                                                    <DataGridTextColumn Header="合計金額"
+                                                        Binding="{Binding display_total_cost}"
+                                                        Width="85" MinWidth="75"/>
+
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+
+                                            <!-- 0件メッセージオーバーレイ -->
+                                            <Border Grid.Row="0"
+                                                    Background="#F5F5F5"
+                                                    CornerRadius="8" Padding="24,16"
+                                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Border.Visibility>
+                                                    <Binding Path="is_empty_result" Converter="{StaticResource BoolToVis}"/>
+                                                </Border.Visibility>
+                                                <TextBlock Text="絞り込み条件に一致するデータがありません。&#x0a;条件を変更してください。"
+                                                           TextAlignment="Center" FontSize="13"
+                                                           Foreground="#888" LineHeight="22"/>
+                                            </Border>
+
+                                            <!-- 月次合計バー -->
+                                            <Border Grid.Row="1" Background="{DynamicResource brush_accent}" Padding="14,8">
+                                                <WrapPanel>
+                                                    <TextBlock Foreground="White" FontWeight="Bold"
+                                                               FontSize="12" Margin="0,0,20,0"
+                                                               Text="【月次合計】"/>
+                                                    <TextBlock Foreground="White" FontSize="12" Margin="0,0,20,0">
+                                                        <Run Text="技師人件費："/>
+                                                        <Run Text="{Binding display_total_engineer_cost, Mode=OneWay, StringFormat={}{0}円}"/>
+                                                    </TextBlock>
+                                                    <TextBlock Foreground="White" FontSize="12" Margin="0,0,20,0">
+                                                        <Run Text="助手人件費："/>
+                                                        <Run Text="{Binding display_total_assistant_cost, Mode=OneWay, StringFormat={}{0}円}"/>
+                                                    </TextBlock>
+                                                    <TextBlock Foreground="White" FontSize="12" Margin="0,0,20,0">
+                                                        <Run Text="交通費："/>
+                                                        <Run Text="{Binding display_total_transport_cost, Mode=OneWay, StringFormat={}{0}円}"/>
+                                                    </TextBlock>
+                                                    <TextBlock Foreground="White" FontSize="12" Margin="0,0,20,0">
+                                                        <Run Text="損料："/>
+                                                        <Run Text="{Binding display_total_equipment_cost, Mode=OneWay, StringFormat={}{0}円}"/>
+                                                    </TextBlock>
+                                                    <TextBlock Foreground="#F0E040" FontWeight="Bold" FontSize="13">
+                                                        <Run Text="合計："/>
+                                                        <Run Text="{Binding display_grand_total, Mode=OneWay, StringFormat={}{0}円}"/>
+                                                    </TextBlock>
+                                                </WrapPanel>
+                                            </Border>
+
+                                        </Grid>
+                                    </DataTemplate>
+                                </TabControl.ContentTemplate>
+                            </TabControl>
+
+                        </Grid>
+                    </DataTemplate>
+                </TabControl.ContentTemplate>
+            </TabControl>
+
+            <!-- 現場なし表示 -->
+            <Border Background="#F5F5F5"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Padding="40,30" CornerRadius="8"
+                    Visibility="{Binding has_no_projects, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="現場が登録されていません&#x0a;設定画面から現場を追加してください"
+                           TextAlignment="Center" FontSize="14" Foreground="#888"
+                           LineHeight="24"/>
+            </Border>
+
+        </Grid>
+
+        <!-- ▼▼▼ 修正：ローディングバーを外側Grid直下に配置（全行スパン・最下部）▼▼▼ -->
+        <!-- 外側Grid（Row0:ヘッダー / Row1:ステータス / Row2:コンテンツ）を全てカバーして下部に表示 -->
+        <!-- DataContextはCostPage直接のcost_view_modelを参照するため正しくis_busyをバインドできる -->
+        <ProgressBar Grid.Row="0" Grid.RowSpan="3"
+                     VerticalAlignment="Bottom"
+                     IsIndeterminate="True"
+                     Height="4"
+                     Foreground="{DynamicResource brush_accent}"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Visibility="{Binding is_busy, Converter={StaticResource BoolToVis}}"/>
+
+    </Grid>
+</UserControl>

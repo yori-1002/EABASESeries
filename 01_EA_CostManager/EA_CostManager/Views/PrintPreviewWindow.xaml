@@ -1,0 +1,41 @@
+<Window x:Class="EA_CostManager.Views.PrintPreviewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="印刷プレビュー"
+        Width="1200" Height="860"
+        WindowStartupLocation="CenterOwner">
+
+    <DockPanel>
+
+        <!-- ツールバー -->
+        <Border DockPanel.Dock="Top"
+                Background="#2E75B6" Padding="12,6">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left"
+                           Text="🖨 印刷プレビュー"
+                           Foreground="White" FontSize="13" FontWeight="Bold"
+                           VerticalAlignment="Center"/>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="🖨 印刷する"
+                            Width="110" Height="30" Margin="0,0,8,0"
+                            Background="#27AE60" Foreground="White"
+                            BorderThickness="0" FontSize="12"
+                            Click="btn_print_Click"/>
+                    <Button Content="✕ 閉じる"
+                            Width="80" Height="30"
+                            Background="#E74C3C" Foreground="White"
+                            BorderThickness="0" FontSize="12"
+                            Click="btn_close_Click"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- プレビュー本体（FlowDocumentReader） -->
+        <!-- FlowDocumentReader は組み込みのズーム・ページナビゲーション機能を持つ -->
+        <FlowDocumentReader x:Name="doc_reader"
+                            ViewingMode="Page"
+                            Zoom="75"
+                            Background="#888"/>
+
+    </DockPanel>
+</Window>

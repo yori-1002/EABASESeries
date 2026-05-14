@@ -1,0 +1,97 @@
+<Window x:Class="EA_CostManager.Views.ProjectInfoDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="新規現場の登録"
+        Width="480" Height="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <Style x:Key="LabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#333"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="InputStyle" TargetType="TextBox">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="6,5"/>
+            <Setter Property="BorderBrush" Value="#CCCCCC"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ヘッダー -->
+        <Border Grid.Row="0" Background="#EEF4FB" Padding="12,8"
+                CornerRadius="4" Margin="0,0,0,16">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="区分コード：" FontWeight="Bold" FontSize="13"/>
+                <TextBlock x:Name="txt_category_code" FontSize="13" Foreground="#2E75B6"
+                           FontWeight="Bold"/>
+                <TextBlock Text="　※新しく検出された区分コードです" FontSize="11" Foreground="#666"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 入力フォーム -->
+        <StackPanel Grid.Row="1">
+            <TextBlock Text="現場名 *" Style="{StaticResource LabelStyle}"/>
+            <ComboBox x:Name="txt_site_name"
+                      IsEditable="True"
+                      FontSize="12" Padding="6,5"
+                      BorderBrush="#CCCCCC"
+                      Margin="0,0,0,12"/>
+            <TextBlock Text="※日報に含まれる現場名から候補を表示しています（変更可）"
+                       FontSize="10" Foreground="#888" Margin="0,-8,0,8"/>
+
+            <TextBlock Text="属性 *" Style="{StaticResource LabelStyle}"/>
+            <!-- ▼▼▼ 修正：属性一覧（契約中→契約済・契約終了削除・追加属性新規） ▼▼▼
+                 契約前   → オレンジ  #E67E22
+                 契約済 → 紫        #8E44AD
+                 自社案件 → 青        #2E75B6
+                 第一土木 → 緑        #27AE60
+                 セミナー → ピンク    #E91E8C
+                 追加     → コーラル  #E8543A
+                 その他   → グレー    #7F8C8D -->
+            <ComboBox x:Name="cmb_attribute" FontSize="12" Padding="6,5"
+                      Margin="0,0,0,12" SelectedIndex="1">
+                <ComboBoxItem Content="契約前"/>
+                <ComboBoxItem Content="契約済"/>
+                <Separator/>
+                <ComboBoxItem Content="自社案件"/>
+                <ComboBoxItem Content="第一土木"/>
+                <ComboBoxItem Content="セミナー"/>
+                <ComboBoxItem Content="追加"/>
+                <ComboBoxItem Content="その他"/>
+            </ComboBox>
+
+            <TextBlock Text="詳細（任意）" Style="{StaticResource LabelStyle}"/>
+            <TextBox x:Name="txt_detail" Style="{StaticResource InputStyle}"
+                     Height="120" TextWrapping="Wrap" AcceptsReturn="True"
+                     VerticalScrollBarVisibility="Auto"/>
+
+            <TextBlock x:Name="txt_error" Foreground="Red" FontSize="11"
+                       Visibility="Collapsed"/>
+        </StackPanel>
+
+        <!-- ボタン -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button x:Name="btn_skip" Content="スキップ"
+                    Width="90" Padding="0,7"
+                    Margin="0,0,8,0" Click="btn_skip_Click"/>
+            <Button x:Name="btn_register" Content="登録する"
+                    Width="90" Padding="0,7"
+                    Background="#2E75B6" Foreground="White"
+                    Click="btn_register_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
