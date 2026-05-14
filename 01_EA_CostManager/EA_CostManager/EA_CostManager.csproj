@@ -86,8 +86,40 @@
 	<ItemGroup>
 		<None Include="..\icon_set\icon_fix.ico">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<!-- ▼ 追加 [v1.0.3] CopyToPublishDirectory を明示
+			     PublishSingleFile=true のとき、<None> は build には反映されるが
+			     publish には反映されない（既定値=Never）。
+			     これがバグ③「アイコンが急に表示されなくなる人がいる」の真の原因と判明。
+			     開発機で Visual Studio から起動 = build 経由 → 表示される
+			     インストーラ経由（publish 出力ベース）→ 表示されない
+			     CopyToPublishDirectory=PreserveNewest を明示することで
+			     publish 出力にも確実に icon_fix.ico が含まれる。 -->
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
 		</None>
 	</ItemGroup>
+
+	<!-- ============================================================ -->
+	<!-- ▼ 追加 [v1.0.3] icon_fix.ico を publish 出力に確実にコピー
+	     PublishSingleFile=true + IncludeNativeLibrariesForSelfExtract=true の
+	     組み合わせでは、<None> + CopyToPublishDirectory を指定しても
+	     publish 出力に icon_fix.ico が含まれない既知の挙動がある
+	     （MSBuild が <None> ファイルを EXE 単一化対象として扱うため、
+	     物理ファイルとしては publish 出力から除外される）。
+	
+	     AfterPublish ターゲットで明示的にコピーすることで、
+	     PublishSingleFile=true でも EXE の隣に icon_fix.ico が確実に配置される。
+	     これによりバグ③「アイコンが表示されない」現象を根本解決する。 -->
+	<!-- ============================================================ -->
+	<Target Name="CopyIconAfterPublish" AfterTargets="Publish">
+		<Copy
+			SourceFiles="..\icon_set\icon_fix.ico"
+			DestinationFolder="$(PublishDir)"
+			SkipUnchangedFiles="true"
+			ContinueOnError="false" />
+		<Message
+			Text="icon_fix.ico を publish ディレクトリへコピーしました: $(PublishDir)icon_fix.ico"
+			Importance="high" />
+	</Target>
 
 	<!-- ============================================================ -->
 	<!-- ▼ v1.0.0 追加：publish 後に 01_version.txt を自動生成 -->
