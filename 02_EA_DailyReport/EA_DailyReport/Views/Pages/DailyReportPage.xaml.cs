@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using Dapper;                              // ▼ 追加：v0.1.8 SQL 実行用（QueryAsync）
+using EA_DailyReport.Data;                 // ▼ 追加：v0.1.8 database_manager 参照
 using EA_DailyReport.Models;
 using EA_DailyReport.Services;
 using EA_DailyReport.Views.Dialogs;
@@ -19,6 +21,11 @@ namespace EA_DailyReport.Views.Pages
     /// MainWindow から「年/月/氏名フィルター」を指定して開けるようコンストラクタ追加
     /// 「📅 今月の日報」クイックボタン → 当月度+自分指定
     /// 月度ツリー → 任意月度・全員
+    ///
+    /// ▼ v0.1.8 修正：
+    /// 月度ドロップダウンを DB ベース化（実データある月度のみ＋当月度フォールバック）
+    /// 旧実装：固定で過去6ヶ月＋当月度の7ヶ月を機械生成 → 空月度も表示されるバグ
+    /// 新実装：daily_reports から月度を集計（MainWindow 月度ツリーと同等ロジック）
     /// </summary>
     public partial class DailyReportPage : Page
     {
@@ -56,8 +63,10 @@ namespace EA_DailyReport.Views.Pages
 
         private async void on_loaded(object sender, RoutedEventArgs e)
         {
-            // 月度コンボボックスを初期化（過去6ヶ月＋当月）
-            init_month_combo();
+            // ▼ 修正：v0.1.8 月度コンボボックスを DB ベース初期化に変更
+            // 旧：init_month_combo()（固定7ヶ月を機械生成）
+            // 新：init_month_combo_async()（daily_reports から実データある月度を取得）
+            await init_month_combo_async();
             // 氏名コンボボックスを初期化（後でDB取得した氏名で充実）
             init_employee_combo();
 
@@ -130,10 +139,93 @@ namespace EA_DailyReport.Views.Pages
         }
 
         // ────────────────────────────────────────────────
-        // 月度コンボボックスの初期化
+        // ▼ 修正：v0.1.8 月度コンボボックスの初期化（DB ベース化）
         // ────────────────────────────────────────────────
 
-        private void init_month_combo()
+        /// <summary>
+        /// ▼ 修正：v0.1.8
+        /// 月度コンボボックスを DB から実データのある月度のみで初期化する
+        ///
+        /// 処理ロジック：
+        /// ① daily_reports.report_date を全件取得して月度サイクルでグルーピング
+        /// ② 当月度は実データ無くても必ず含める（入力導線確保のため）
+        /// ③ 新しい順にソートしてコンボボックスにバインド
+        /// ④ DB アクセス失敗時は旧ロジック（固定7ヶ月）にフォールバック
+        ///
+        /// 注意：MainWindow.build_month_tree_async() と同等の月度判定ロジック。
+        /// ヘルパーメソッド（date_to_month_period / get_current_month_period）は
+        /// 両ファイルに重複定義になっているが、v0.1.8 時点では共通化せず置いておく。
+        /// 共通化は別タスク（リファクタリング項目）として基本設計書に記録する想定。
+        /// </summary>
+        private async Task init_month_combo_async()
+        {
+            _months.Clear();
+
+            try
+            {
+                // ─── ① daily_reports から月度を集計 ───
+                // MainWindow の月度ツリーと同じクエリ
+                using var conn = database_manager.create_connection();
+                var raw = (await conn.QueryAsync<(string report_date, int cnt)>(@"
+                    SELECT report_date, COUNT(*) AS cnt
+                    FROM daily_reports
+                    WHERE report_date IS NOT NULL AND report_date <> ''
+                    GROUP BY report_date
+                ")).ToList();
+
+                // ─── ② 月度サイクル（前月21日〜当月20日）でグルーピング ───
+                // 月度の集合を作るので HashSet（重複自動排除）
+                var month_set = new HashSet<(int year, int month)>();
+                foreach (var (date_str, _) in raw)
+                {
+                    if (!DateTime.TryParse(date_str, out var dt)) continue;
+                    month_set.Add(date_to_month_period(dt));
+                }
+
+                // ─── ③ 当月度は実データ無くても必ず含める ───
+                // 入力開始の導線を確保するため（要件㊶ の解釈：当月度は常時表示）
+                month_set.Add(get_current_month_period());
+
+                // ─── ④ 月度範囲リストを生成（新しい順） ───
+                foreach (var (y, m) in month_set
+                    .OrderByDescending(x => x.year)
+                    .ThenByDescending(x => x.month))
+                {
+                    int prev_y = y;
+                    int prev_m = m - 1;
+                    if (prev_m <= 0) { prev_m += 12; prev_y--; }
+
+                    _months.Add(new MonthRange
+                    {
+                        label = $"{y}年{m}月度（{prev_m}/21〜{m}/20）",
+                        start = new DateTime(prev_y, prev_m, 21),
+                        end = new DateTime(y, m, 20),
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                // DB アクセス失敗時は旧ロジック（固定7ヶ月）にフォールバック
+                // 起動時に DB がまだ初期化されてない等の例外ケースを想定
+                System.Diagnostics.Debug.WriteLine(
+                    $"[DailyReportPage] 月度コンボ DB 取得失敗・固定リストにフォールバック: {ex.Message}");
+                fallback_init_month_combo();
+            }
+
+            // コンボボックスにバインド
+            cmb_month.ItemsSource = null;
+            cmb_month.ItemsSource = _months;
+            cmb_month.DisplayMemberPath = "label";
+            cmb_month.SelectedIndex = 0;  // 先頭（最新月度）を選択
+        }
+
+        /// <summary>
+        /// ▼ 追加：v0.1.8
+        /// 月度コンボボックスのフォールバック初期化（旧ロジック保持）
+        /// DB アクセスが失敗した場合のみ呼ばれる。
+        /// 過去6ヶ月＋当月度＝7ヶ月分を機械生成する。
+        /// </summary>
+        private void fallback_init_month_combo()
         {
             _months.Clear();
 
@@ -166,10 +258,41 @@ namespace EA_DailyReport.Views.Pages
                 };
                 _months.Add(range);
             }
+        }
 
-            cmb_month.ItemsSource = _months;
-            cmb_month.DisplayMemberPath = "label";
-            cmb_month.SelectedIndex = 0;  // 当月度
+        /// <summary>
+        /// ▼ 追加：v0.1.8
+        /// 日付から月度サイクルの (year, month) を計算する。
+        /// 月度サイクル：前月21日〜当月20日
+        /// 例：4/25 → 5月度、5/15 → 5月度、5/21 → 6月度
+        ///
+        /// 注意：MainWindow.date_to_month_period と同一実装。
+        /// v0.1.8 時点では共通化せず両ファイルに重複定義。
+        /// （将来のリファクタリング項目）
+        /// </summary>
+        private static (int year, int month) date_to_month_period(DateTime dt)
+        {
+            int year = dt.Year;
+            int month = dt.Month;
+            if (dt.Day >= 21)
+            {
+                month++;
+                if (month > 12) { month = 1; year++; }
+            }
+            return (year, month);
+        }
+
+        /// <summary>
+        /// ▼ 追加：v0.1.8
+        /// 当月度の (year, month) を取得する。
+        /// 月度サイクル：前月21日〜当月20日
+        ///
+        /// 注意：MainWindow.get_current_month_period と同一実装。
+        /// v0.1.8 時点では共通化せず両ファイルに重複定義。
+        /// </summary>
+        private static (int year, int month) get_current_month_period()
+        {
+            return date_to_month_period(DateTime.Today);
         }
 
         // ────────────────────────────────────────────────

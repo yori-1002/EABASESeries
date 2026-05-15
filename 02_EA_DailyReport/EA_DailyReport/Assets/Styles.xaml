@@ -219,6 +219,25 @@
         <Setter Property="Foreground" Value="#BDC3C7" />
         <Setter Property="Padding" Value="4,3" />
         <Setter Property="Cursor" Value="Hand" />
+        <!-- ▼ 追加：v0.1.8 選択時の背景白問題を解消するためのシステムブラシ上書き
+             WPF TreeViewItem の既定 ControlTemplate は SystemColors.HighlightBrushKey 等を
+             参照しているため、Style.Resources でブラシキーを上書きすることで
+             選択時・非フォーカス時の背景色を明示的に指定する。
+             特に「非フォーカス時の選択背景」(InactiveSelectionHighlightBrushKey) が
+             Windows 既定で白系のため、これを accent カラーに上書きすることで
+             右ペインクリック後も月度の選択状態が視認できるようになる。 -->
+        <Style.Resources>
+            <!-- フォーカス時の選択背景（accent 色）と文字色（白） -->
+            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"
+                             Color="{StaticResource color_accent}" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}"
+                             Color="White" />
+            <!-- 非フォーカス時の選択背景（白問題の主因はこちら） -->
+            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}"
+                             Color="{StaticResource color_accent}" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}"
+                             Color="White" />
+        </Style.Resources>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Foreground" Value="White" />

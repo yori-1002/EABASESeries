@@ -28,7 +28,7 @@
 
 ; ▼ 修正：publish フォルダの正確なパス（dotnet publish -o .\publish の出力先）
 ;   ※ ローカル開発フォルダパス。フォルダ整理時はここも要修正
-#define MySourceDir    "D:\00_MyFile\00_Developer\04_Earth Analyzer Business Administration System\01_EABASE Series\01_EA_CostManager\publish"
+#define MySourceDir    "D:\00_MyFile\00_Developer\04_Earth Analyzer Business Administration System\01_EABASE Series\01_EA_CostManager\EA_CostManager\publish"
 
 [Setup]
 ; ▼ アプリ識別子（絶対変更禁止）
@@ -83,6 +83,14 @@ Name: "startmenuicon"; Description: "スタートメニューにショートカ�
 [Files]
 ; メインの実行ファイル
 Source: "{#MySourceDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; ▼ 追加 [v1.0.3] スプラッシュ用アイコン
+;   バグ③「アイコンが急に表示されなくなる人がいる」の真の原因が、
+;   インストーラに icon_fix.ico を含めていなかったことと判明。
+;   v1.0.2 までは EXE 単体しか配布していなかったため、
+;   インストーラ経由でインストールしたユーザーは全員アイコン非表示だった。
+;   v1.0.3 で publish 出力に icon_fix.ico を含めるよう csproj を修正し、
+;   このインストーラスクリプトでも EXE と同じディレクトリに配置するよう追加。
+Source: "{#MySourceDir}\icon_fix.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 ; ▼ 修正：ショートカットのカーソル時ツールチップを「CostManager Ver1.0.0」表記に
