@@ -7,18 +7,130 @@
         mc:Ignorable="d"
         x:Name="this_dialog"
         Title="日報入力"
-        Height="640" Width="1100"
-        MinHeight="500" MinWidth="900"
+        Height="900" Width="1100"
+        MinHeight="720" MinWidth="1000"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource brush_bg_main}">
+
+    <!-- ▼ 追加：v0.1.8 ローカル限定スタイル
+         danger / success / secondary ボタン用と、読み取り専用フィールド表示用。
+         共通化は Styles.xaml に集約してもいいが、Phase 1 ではここに置く（後でリファクタリング検討） -->
+    <Window.Resources>
+
+        <!-- 終了ボタン用（赤系・誤クリック警告） -->
+        <Style x:Key="style_button_local_danger" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource brush_danger}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="20,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="btn_border"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="btn_border" Property="Background" Value="#DC2626"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="btn_border" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ＋追加ボタン用（緑系・新規追加の合図） -->
+        <Style x:Key="style_button_local_success" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource brush_success}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="18,7"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="btn_border"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="btn_border" Property="Background" Value="#059669"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="btn_border" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 戻る・編集キャンセル用（控えめ） -->
+        <Style x:Key="style_button_local_secondary" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource brush_bg_card}"/>
+            <Setter Property="Foreground" Value="{StaticResource brush_text_primary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource brush_border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="18,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <!-- 読み取り専用フィールド（職種・区分詳細・作業時間残 等の自動表示用） -->
+        <Style x:Key="style_readonly_field" TargetType="TextBox">
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="Background" Value="#F1F5F9"/>
+            <Setter Property="BorderBrush" Value="{StaticResource brush_border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="Foreground" Value="{StaticResource brush_text_secondary}"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- フィールドラベル（小さめ・上付き） -->
+        <Style x:Key="style_field_label" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource brush_text_secondary}"/>
+            <Setter Property="Margin" Value="0,0,0,3"/>
+        </Style>
+
+        <!-- セクション見出し -->
+        <Style x:Key="style_section_label" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource brush_text_primary}"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+    </Window.Resources>
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <!-- タイトル -->
             <RowDefinition Height="Auto"/>
+            <!-- Section 1: 日報基本 -->
             <RowDefinition Height="Auto"/>
+            <!-- Section 2: 作業入力フォーム -->
             <RowDefinition Height="*"/>
+            <!-- Section 3: 追加済み一覧（残りスペース） -->
             <RowDefinition Height="Auto"/>
+            <!-- Footer: 戻る・終了・保存 -->
         </Grid.RowDefinitions>
 
         <!-- ===== タイトル ===== -->
@@ -27,59 +139,10 @@
                    Text="日報入力"
                    Style="{StaticResource style_page_title}"/>
 
-        <!-- ===== 1段目：日付・氏名 ===== -->
+        <!-- ============================================================ -->
+        <!-- ===== Section 1：日報基本（1日通し共通） ===================== -->
+        <!-- ============================================================ -->
         <Border Grid.Row="1"
-                Style="{StaticResource style_card}"
-                Padding="15,12"
-                Margin="0,0,0,10">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="日付："
-                           VerticalAlignment="Center"
-                           FontWeight="SemiBold"
-                           Margin="0,0,8,0"/>
-                <DatePicker x:Name="dp_report_date"
-                            Width="140"
-                            VerticalAlignment="Center"
-                            SelectedDateChanged="report_date_or_name_changed"/>
-
-                <TextBlock Text="氏名："
-                           VerticalAlignment="Center"
-                           FontWeight="SemiBold"
-                           Margin="25,0,8,0"/>
-                <ComboBox x:Name="cmb_employee"
-                          Width="160"
-                          VerticalAlignment="Center"
-                          IsEditable="True"
-                          IsTextSearchEnabled="True"
-                          StaysOpenOnEdit="True"
-                          SelectionChanged="report_date_or_name_changed"
-                          LostFocus="report_date_or_name_changed"/>
-                <TextBlock Text="（自動でアクセスユーザー・代理入力可）"
-                           VerticalAlignment="Center"
-                           Foreground="{StaticResource brush_text_secondary}"
-                           FontSize="11"
-                           Margin="10,0,0,0"/>
-
-                <!-- ▼ 追加：v0.1.6 既存日報検出時の表示 -->
-                <Border x:Name="border_existing_warning"
-                        Background="#FFF4E5"
-                        BorderBrush="{StaticResource brush_warning}"
-                        BorderThickness="1"
-                        CornerRadius="4"
-                        Padding="8,3"
-                        Margin="20,0,0,0"
-                        Visibility="Collapsed"
-                        VerticalAlignment="Center">
-                    <TextBlock Text="📝 既存の日報あり：出退勤と場所はロック中"
-                               Foreground="{StaticResource brush_warning}"
-                               FontSize="11"
-                               FontWeight="SemiBold"/>
-                </Border>
-            </StackPanel>
-        </Border>
-
-        <!-- ===== 2段目：出退勤・場所・自動算出 ===== -->
-        <Border Grid.Row="2"
                 Style="{StaticResource style_card}"
                 Padding="15,12"
                 Margin="0,0,0,10">
@@ -87,108 +150,179 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- 出退勤・場所入力 -->
-                <StackPanel Grid.Row="0" Orientation="Horizontal">
-                    <TextBlock Text="出勤："
-                               VerticalAlignment="Center"
-                               FontWeight="SemiBold"
-                               Margin="0,0,8,0"/>
-                    <TextBox x:Name="txt_clock_in"
-                             Width="70" Padding="6,4"
-                             VerticalAlignment="Center"
-                             Text="08:30"
-                             TextChanged="time_or_settings_changed"/>
+                <TextBlock Grid.Row="0"
+                           Text="日報基本（1日通し共通）"
+                           Style="{StaticResource style_section_label}"/>
 
-                    <TextBlock Text="退勤："
-                               VerticalAlignment="Center"
-                               FontWeight="SemiBold"
-                               Margin="20,0,8,0"/>
-                    <TextBox x:Name="txt_clock_out"
-                             Width="70" Padding="6,4"
-                             VerticalAlignment="Center"
-                             Text="17:30"
-                             TextChanged="time_or_settings_changed"/>
+                <!-- 1段目：日付・氏名・職種・既存日報あり警告 -->
+                <Grid Grid.Row="1" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
 
-                    <!-- ▼ 追加：v0.1.6 ロック解除ボタン（ロック時のみ表示）-->
-                    <Button x:Name="btn_unlock"
-                            Content="🔓 ロック解除"
-                            Padding="10,4"
-                            Margin="15,0,0,0"
-                            Background="{StaticResource brush_warning}"
-                            Foreground="White"
-                            BorderThickness="0"
-                            FontSize="11"
-                            Cursor="Hand"
+                    <!-- 日付 -->
+                    <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                        <TextBlock Text="日付" Style="{StaticResource style_field_label}"/>
+                        <DatePicker x:Name="dp_report_date"
+                                    Width="140"
+                                    TabIndex="1"
+                                    SelectedDateChanged="report_date_or_name_changed"/>
+                    </StackPanel>
+
+                    <!-- 氏名 -->
+                    <StackPanel Grid.Column="1" Margin="0,0,20,0">
+                        <TextBlock Text="氏名" Style="{StaticResource style_field_label}"/>
+                        <ComboBox x:Name="cmb_employee"
+                                  Width="180"
+                                  IsEditable="True"
+                                  IsTextSearchEnabled="True"
+                                  StaysOpenOnEdit="True"
+                                  TabIndex="2"
+                                  SelectionChanged="cmb_employee_changed"
+                                  LostFocus="cmb_employee_changed"/>
+                    </StackPanel>
+
+                    <!-- 職種（自動・読み取り専用） -->
+                    <StackPanel Grid.Column="2" Margin="0,0,20,0">
+                        <TextBlock Text="職種（自動）" Style="{StaticResource style_field_label}"/>
+                        <TextBox x:Name="txt_job_type"
+                                 Width="140"
+                                 Style="{StaticResource style_readonly_field}"
+                                 ToolTip="氏名選択時に employees テーブルから自動取得"/>
+                    </StackPanel>
+
+                    <!-- 既存日報あり警告バッジ -->
+                    <Border Grid.Column="6"
+                            x:Name="border_existing_warning"
+                            Background="#FFF4E5"
+                            BorderBrush="{StaticResource brush_warning}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="8,3"
                             Visibility="Collapsed"
-                            VerticalAlignment="Center"
-                            Click="btn_unlock_Click"
-                            ToolTip="既存日報の出退勤・場所を編集可能にします（要注意）"/>
+                            VerticalAlignment="Bottom"
+                            HorizontalAlignment="Left">
+                        <TextBlock Text="📝 既存の日報あり：出退勤と場所はロック中"
+                                   Foreground="{StaticResource brush_warning}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"/>
+                    </Border>
+                </Grid>
 
-                    <TextBlock Text="開始場所："
-                               VerticalAlignment="Center"
-                               FontWeight="SemiBold"
-                               Margin="25,0,8,0"/>
-                    <ComboBox x:Name="cmb_start_location"
-                              Width="100"
-                              VerticalAlignment="Center"
-                              IsEditable="True"
-                              Text="本社">
-                        <ComboBoxItem>本社</ComboBoxItem>
-                        <ComboBoxItem>現場</ComboBoxItem>
-                        <ComboBoxItem>リモート</ComboBoxItem>
-                        <ComboBoxItem>駐在所</ComboBoxItem>
-                    </ComboBox>
+                <!-- 2段目：出退勤・場所・ロック解除 -->
+                <Grid Grid.Row="2" Margin="0,0,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
 
-                    <TextBlock Text="終了場所："
-                               VerticalAlignment="Center"
-                               FontWeight="SemiBold"
-                               Margin="20,0,8,0"/>
-                    <ComboBox x:Name="cmb_end_location"
-                              Width="100"
-                              VerticalAlignment="Center"
-                              IsEditable="True"
-                              Text="本社">
-                        <ComboBoxItem>本社</ComboBoxItem>
-                        <ComboBoxItem>現場</ComboBoxItem>
-                        <ComboBoxItem>リモート</ComboBoxItem>
-                        <ComboBoxItem>駐在所</ComboBoxItem>
-                    </ComboBox>
-                </StackPanel>
+                    <!-- 出勤 -->
+                    <StackPanel Grid.Column="0" Margin="0,0,15,0">
+                        <TextBlock Text="出勤" Style="{StaticResource style_field_label}"/>
+                        <TextBox x:Name="txt_clock_in"
+                                 Width="80" Padding="6,4"
+                                 Text="08:30"
+                                 TabIndex="3"
+                                 TextChanged="time_or_settings_changed"/>
+                    </StackPanel>
 
-                <!-- 自動算出表示 -->
-                <Border Grid.Row="1"
+                    <!-- 退勤 -->
+                    <StackPanel Grid.Column="1" Margin="0,0,15,0">
+                        <TextBlock Text="退勤" Style="{StaticResource style_field_label}"/>
+                        <TextBox x:Name="txt_clock_out"
+                                 Width="80" Padding="6,4"
+                                 Text="17:30"
+                                 TabIndex="4"
+                                 TextChanged="time_or_settings_changed"/>
+                    </StackPanel>
+
+                    <!-- ロック解除ボタン -->
+                    <StackPanel Grid.Column="2" Margin="0,0,20,0" VerticalAlignment="Bottom">
+                        <TextBlock Text=" " Style="{StaticResource style_field_label}"/>
+                        <Button x:Name="btn_unlock"
+                                Content="🔓 ロック解除"
+                                Padding="10,4"
+                                Background="{StaticResource brush_warning}"
+                                Foreground="White"
+                                BorderThickness="0"
+                                FontSize="11"
+                                Cursor="Hand"
+                                Visibility="Collapsed"
+                                Click="btn_unlock_Click"
+                                ToolTip="既存日報の出退勤・場所を編集可能にします（要注意）"/>
+                    </StackPanel>
+
+                    <!-- 開始場所 -->
+                    <StackPanel Grid.Column="3" Margin="0,0,15,0">
+                        <TextBlock Text="開始場所" Style="{StaticResource style_field_label}"/>
+                        <ComboBox x:Name="cmb_start_location"
+                                  Width="130"
+                                  IsEditable="True"
+                                  Text="本社"
+                                  TabIndex="5">
+                            <ComboBoxItem>本社</ComboBoxItem>
+                            <ComboBoxItem>現場</ComboBoxItem>
+                            <ComboBoxItem>リモート</ComboBoxItem>
+                            <ComboBoxItem>駐在所</ComboBoxItem>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <!-- 終了場所 -->
+                    <StackPanel Grid.Column="4" Margin="0,0,0,0">
+                        <TextBlock Text="終了場所" Style="{StaticResource style_field_label}"/>
+                        <ComboBox x:Name="cmb_end_location"
+                                  Width="130"
+                                  IsEditable="True"
+                                  Text="本社"
+                                  TabIndex="6">
+                            <ComboBoxItem>本社</ComboBoxItem>
+                            <ComboBoxItem>現場</ComboBoxItem>
+                            <ComboBoxItem>リモート</ComboBoxItem>
+                            <ComboBoxItem>駐在所</ComboBoxItem>
+                        </ComboBox>
+                    </StackPanel>
+                </Grid>
+
+                <!-- 自動算出表示（早朝・残業・深夜） -->
+                <Border Grid.Row="3"
                         Background="#EDF4FA"
                         CornerRadius="4"
                         Padding="12,8"
-                        Margin="0,10,0,0">
+                        Margin="0,12,0,0"
+                        Grid.ColumnSpan="3">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="🧮 自動算出："
                                    VerticalAlignment="Center"
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource brush_accent_hover}"/>
-                        <TextBlock Text="早朝 "
-                                   VerticalAlignment="Center"
-                                   Margin="15,0,3,0"/>
+                        <TextBlock Text="早朝 " VerticalAlignment="Center" Margin="15,0,3,0"/>
                         <TextBlock x:Name="txt_calc_early"
                                    Text="0:00"
                                    FontFamily="Consolas"
                                    VerticalAlignment="Center"
                                    FontWeight="Bold"
                                    Foreground="{StaticResource brush_text_primary}"/>
-                        <TextBlock Text="  /  残業 "
-                                   VerticalAlignment="Center"
-                                   Margin="10,0,3,0"/>
+                        <TextBlock Text="  /  残業 " VerticalAlignment="Center" Margin="10,0,3,0"/>
                         <TextBlock x:Name="txt_calc_overtime"
                                    Text="0:00"
                                    FontFamily="Consolas"
                                    VerticalAlignment="Center"
                                    FontWeight="Bold"
                                    Foreground="{StaticResource brush_text_primary}"/>
-                        <TextBlock Text="  /  深夜 "
-                                   VerticalAlignment="Center"
-                                   Margin="10,0,3,0"/>
+                        <TextBlock Text="  /  深夜 " VerticalAlignment="Center" Margin="10,0,3,0"/>
                         <TextBlock x:Name="txt_calc_late_night"
                                    Text="0:00"
                                    FontFamily="Consolas"
@@ -205,198 +339,440 @@
             </Grid>
         </Border>
 
-        <!-- ===== 3段目：作業詳細（複数行 DataGrid） ===== -->
+        <!-- ============================================================ -->
+        <!-- ===== Section 2：作業入力フォーム（1作業ずつ） ============== -->
+        <!-- ============================================================ -->
+        <Border Grid.Row="2"
+                Style="{StaticResource style_card}"
+                Padding="15,12"
+                Margin="0,0,0,10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <!-- セクション見出し -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- 区分・区分詳細・業務名・区分リスト -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- 内容 -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- 備考 -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- 作業時間・残・ソフト機材 -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- 車両・移動方法・発・着・距離・MAP -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- ボタン（追加/更新/編集キャンセル） -->
+                </Grid.RowDefinitions>
+
+                <!-- セクション見出し -->
+                <TextBlock Grid.Row="0"
+                           x:Name="txt_form_section_label"
+                           Text="作業入力（1作業ずつ・Tab で次フィールドへ）"
+                           Style="{StaticResource style_section_label}"/>
+
+                <!-- 編集中バナー（編集モード時のみ表示） -->
+                <Border Grid.Row="0"
+                        x:Name="border_edit_mode_banner"
+                        Background="#FEF3C7"
+                        BorderBrush="#F59E0B"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="8,3"
+                        Margin="280,0,0,10"
+                        HorizontalAlignment="Left"
+                        Visibility="Collapsed">
+                    <TextBlock x:Name="txt_edit_mode_banner_text"
+                               Text="📝 編集中：1件目を修正しています"
+                               Foreground="#92400E"
+                               FontSize="11"
+                               FontWeight="SemiBold"/>
+                </Border>
+
+                <!-- 行1：区分・区分詳細・業務名・区分リスト -->
+                <Grid Grid.Row="1" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 区分（オートコンプリート） -->
+                    <StackPanel Grid.Column="0" Margin="0,0,15,0">
+                        <TextBlock Text="区分" Style="{StaticResource style_field_label}"/>
+                        <ctrl:AutoCompleteTextBox x:Name="txt_category"
+                                                  Width="140"
+                                                  TabIndex="10"
+                                                  ItemsSource="{Binding ElementName=this_dialog, Path=category_list}"
+                                                  LostFocus="txt_category_LostFocus"/>
+                    </StackPanel>
+
+                    <!-- 区分詳細（自動表示） -->
+                    <StackPanel Grid.Column="1" Margin="0,0,15,0">
+                        <TextBlock Text="区分詳細（自動）" Style="{StaticResource style_field_label}"/>
+                        <TextBox x:Name="txt_category_detail"
+                                 Width="200"
+                                 Style="{StaticResource style_readonly_field}"
+                                 ToolTip="区分選択時に projects.detail から自動取得（未登録の場合は空欄）"/>
+                    </StackPanel>
+
+                    <!-- 業務名（オートコンプリート） -->
+                    <StackPanel Grid.Column="2" Margin="0,0,15,0">
+                        <TextBlock Text="業務名" Style="{StaticResource style_field_label}"/>
+                        <ctrl:AutoCompleteTextBox x:Name="txt_project_name"
+                                                  TabIndex="11"
+                                                  ItemsSource="{Binding ElementName=this_dialog, Path=project_name_list}"/>
+                    </StackPanel>
+
+                    <!-- 区分リストボタン（Phase 2 で実装・現状は無効化） -->
+                    <StackPanel Grid.Column="3" VerticalAlignment="Bottom">
+                        <TextBlock Text=" " Style="{StaticResource style_field_label}"/>
+                        <Button x:Name="btn_open_category_list"
+                                Content="区分リスト"
+                                Padding="14,5"
+                                Background="{StaticResource brush_text_secondary}"
+                                Foreground="White"
+                                BorderThickness="0"
+                                FontSize="11"
+                                IsEnabled="False"
+                                Cursor="Hand"
+                                Click="btn_open_category_list_Click"
+                                ToolTip="区分一覧サブダイアログ（Phase 2 で有効化予定）"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- 行2：内容 -->
+                <StackPanel Grid.Row="2" Margin="0,0,0,8">
+                    <TextBlock Text="内容" Style="{StaticResource style_field_label}"/>
+                    <TextBox x:Name="txt_detail"
+                             Padding="6,4"
+                             TabIndex="12"/>
+                </StackPanel>
+
+                <!-- 行3：備考 -->
+                <StackPanel Grid.Row="3" Margin="0,0,0,8">
+                    <TextBlock Text="備考" Style="{StaticResource style_field_label}"/>
+                    <TextBox x:Name="txt_note"
+                             Padding="6,4"
+                             TabIndex="13"/>
+                </StackPanel>
+
+                <!-- 行4：作業時間・残・ソフト機材 -->
+                <Grid Grid.Row="4" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 作業時間 -->
+                    <StackPanel Grid.Column="0" Margin="0,0,15,0">
+                        <TextBlock Text="作業時間（h）" Style="{StaticResource style_field_label}"/>
+                        <TextBox x:Name="txt_hours"
+                                 Width="100" Padding="6,4"
+                                 TabIndex="14"
+                                 TextChanged="txt_hours_TextChanged"/>
+                    </StackPanel>
+
+                    <!-- 作業時間残（自動） -->
+                    <StackPanel Grid.Column="1" Margin="0,0,15,0">
+                        <TextBlock Text="残（自動）" Style="{StaticResource style_field_label}"/>
+                        <TextBox x:Name="txt_hours_remaining"
+                                 Width="80"
+                                 Style="{StaticResource style_readonly_field}"
+                                 Text="8h"
+                                 ToolTip="8h − 一覧の合計時間 − フォームの作業時間"/>
+                    </StackPanel>
+
+                    <!-- ソフト・機材 -->
+                    <StackPanel Grid.Column="2" Margin="0,0,15,0">
+                        <TextBlock Text="ソフト・機材" Style="{StaticResource style_field_label}"/>
+                        <ctrl:AutoCompleteTextBox x:Name="txt_software"
+                                                  Width="220"
+                                                  TabIndex="15"
+                                                  ItemsSource="{Binding ElementName=this_dialog, Path=software_list}"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- 行5：車両・移動方法・発・着・距離・MAP -->
+                <Grid Grid.Row="5" Margin="0,0,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 車両（運転者） -->
+                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                        <TextBlock Text="車両（運転者）" Style="{StaticResource style_field_label}"/>
+                        <ctrl:AutoCompleteTextBox x:Name="txt_vehicle"
+                                                  Width="160"
+                                                  TabIndex="16"
+                                                  ItemsSource="{Binding ElementName=this_dialog, Path=vehicle_list}"/>
+                    </StackPanel>
+
+                    <!-- 移動方法 -->
+                    <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                        <TextBlock Text="移動方法" Style="{StaticResource style_field_label}"/>
+                        <ctrl:AutoCompleteTextBox x:Name="txt_transport"
+                                                  Width="110"
+                                                  TabIndex="17"
+                                                  ItemsSource="{Binding ElementName=this_dialog, Path=transport_list}"/>
+                    </StackPanel>
+
+                    <!-- 発 -->
+                    <StackPanel Grid.Column="2" Margin="0,0,12,0">
+                        <TextBlock Text="発" Style="{StaticResource style_field_label}"/>
+                        <TextBox x:Name="txt_from_location"
+                                 Width="160" Padding="6,4"
+                                 TabIndex="18"/>
+                    </StackPanel>
+
+                    <!-- 着 -->
+                    <StackPanel Grid.Column="3" Margin="0,0,12,0">
+                        <TextBlock Text="着" Style="{StaticResource style_field_label}"/>
+                        <TextBox x:Name="txt_to_location"
+                                 Width="160" Padding="6,4"
+                                 TabIndex="19"/>
+                    </StackPanel>
+
+                    <!-- 距離（km） -->
+                    <StackPanel Grid.Column="4" Margin="0,0,12,0">
+                        <TextBlock Text="距離（km）" Style="{StaticResource style_field_label}"/>
+                        <TextBox x:Name="txt_distance"
+                                 Width="80" Padding="6,4"
+                                 TabIndex="20"/>
+                    </StackPanel>
+
+                    <!-- MAP ボタン（Sprint 2 で実装・現状は無効化） -->
+                    <StackPanel Grid.Column="5" VerticalAlignment="Bottom">
+                        <TextBlock Text=" " Style="{StaticResource style_field_label}"/>
+                        <Button x:Name="btn_map"
+                                Content="🗺 MAP"
+                                Padding="10,5"
+                                Background="{StaticResource brush_text_secondary}"
+                                Foreground="White"
+                                BorderThickness="0"
+                                FontSize="11"
+                                IsEnabled="False"
+                                Cursor="Hand"
+                                Click="btn_map_Click"
+                                ToolTip="Google Maps 連携（Sprint 2 で有効化予定）"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- 行6：追加・更新・編集キャンセルボタン群 -->
+                <Grid Grid.Row="6" Margin="0,12,0,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <!-- 新規追加ボタン（新規入力モード時のみ表示） -->
+                        <Button x:Name="btn_add_work"
+                                Content="＋ この作業を追加"
+                                Style="{StaticResource style_button_local_success}"
+                                Click="btn_add_work_Click"/>
+
+                        <!-- 更新ボタン（編集モード時のみ表示） -->
+                        <Button x:Name="btn_update_work"
+                                Content="✓ 更新"
+                                Style="{StaticResource style_button_local_success}"
+                                Visibility="Collapsed"
+                                Click="btn_update_work_Click"/>
+
+                        <!-- 編集キャンセルボタン（編集モード時のみ表示） -->
+                        <Button x:Name="btn_cancel_edit"
+                                Content="編集キャンセル"
+                                Style="{StaticResource style_button_local_secondary}"
+                                Margin="8,0,0,0"
+                                Visibility="Collapsed"
+                                Click="btn_cancel_edit_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- ============================================================ -->
+        <!-- ===== Section 3：本日追加済み作業一覧 ======================= -->
+        <!-- ============================================================ -->
         <Border Grid.Row="3"
                 Style="{StaticResource style_card}"
                 Padding="15,12">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
+                    <!-- セクション見出し -->
                     <RowDefinition Height="*"/>
+                    <!-- ListView -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- 合計表示 -->
                 </Grid.RowDefinitions>
 
-                <!-- 行追加・削除ボタン -->
-                <Grid Grid.Row="0" Margin="0,0,0,10">
-                    <TextBlock Text="作業詳細（複数行入力可能・セルクリックで候補表示）"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center"
-                               Foreground="{StaticResource brush_text_primary}"/>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button x:Name="btn_add_row"
-                                Content="+ 行追加"
-                                Padding="14,5"
-                                Background="{StaticResource brush_success}"
-                                Foreground="White"
-                                BorderThickness="0"
-                                FontSize="12"
-                                Cursor="Hand"
-                                Click="btn_add_row_Click"/>
-                        <Button x:Name="btn_remove_row"
-                                Content="- 選択行削除"
-                                Padding="14,5"
-                                Background="{StaticResource brush_danger}"
-                                Foreground="White"
-                                BorderThickness="0"
-                                FontSize="12"
-                                Cursor="Hand"
-                                Margin="8,0,0,0"
-                                Click="btn_remove_row_Click"/>
-                    </StackPanel>
-                </Grid>
+                <TextBlock Grid.Row="0"
+                           x:Name="txt_list_section_label"
+                           Text="本日追加済み作業（0件）"
+                           Style="{StaticResource style_section_label}"/>
 
-                <!--
-                    作業詳細 DataGrid（v0.1.6 改修）
-                    各セルを DataGridTemplateColumn にして AutoCompleteTextBox を埋め込む
-                    マスタ候補は Window の DataContext 経由でバインド：
-                      ItemsSource="{Binding category_list,
-                                    RelativeSource={RelativeSource AncestorType=Window}}"
-                    Window.DataContext は分離してないので、x:Name で参照する：
-                      ItemsSource="{Binding ElementName=this_dialog, Path=category_list}"
-                -->
-                <DataGrid x:Name="grid_details"
-                          Grid.Row="1"
-                          AutoGenerateColumns="False"
-                          CanUserAddRows="False"
-                          CanUserDeleteRows="False"
-                          IsReadOnly="False"
-                          SelectionMode="Single"
-                          HeadersVisibility="Column"
-                          GridLinesVisibility="All"
-                          HorizontalGridLinesBrush="{StaticResource brush_border}"
-                          VerticalGridLinesBrush="{StaticResource brush_border}"
-                          RowHeight="32"
-                          ColumnHeaderHeight="36"
-                          FontSize="12">
-                    <DataGrid.Columns>
+                <!-- 追加済み作業一覧 ListView
+                     ・ItemsSource は cs 側で _details にバインド
+                     ・ダブルクリック → 編集モードに移行（フォームに復元）
+                     ・行内 [×] ボタン → 削除 -->
+                <ListView Grid.Row="1"
+                          x:Name="lst_added_works"
+                          BorderBrush="{StaticResource brush_border}"
+                          BorderThickness="1"
+                          Background="White"
+                          MouseDoubleClick="lst_added_works_MouseDoubleClick"
+                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListView.View>
+                        <GridView>
+                            <!-- 区分 -->
+                            <GridViewColumn Header="区分" Width="100">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding category_code}" VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
 
-                        <!-- 区分（オートコンプリート） -->
-                        <DataGridTemplateColumn Header="区分" Width="80">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <ctrl:AutoCompleteTextBox
-                                        Text="{Binding category_code,
-                                               UpdateSourceTrigger=PropertyChanged,
-                                               Mode=TwoWay}"
-                                        ItemsSource="{Binding ElementName=this_dialog,
-                                                              Path=category_list}"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
+                            <!-- 業務名 -->
+                            <GridViewColumn Header="業務名" Width="200">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding project_name}" VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
 
-                        <!-- 業務名（オートコンプリート） -->
-                        <DataGridTemplateColumn Header="業務名" Width="130">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <ctrl:AutoCompleteTextBox
-                                        Text="{Binding project_name,
-                                               UpdateSourceTrigger=PropertyChanged,
-                                               Mode=TwoWay}"
-                                        ItemsSource="{Binding ElementName=this_dialog,
-                                                              Path=project_name_list}"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
+                            <!-- 内容 -->
+                            <GridViewColumn Header="内容" Width="500">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding detail}"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
 
-                        <!-- 詳細（普通の TextBox・候補なし） -->
-                        <DataGridTextColumn Header="詳細"
-                                            Binding="{Binding detail, UpdateSourceTrigger=PropertyChanged}"
-                                            Width="*"/>
+                            <!-- 時間 -->
+                            <GridViewColumn Header="時間" Width="80">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding hours, StringFormat={}{0}h}"
+                                                   VerticalAlignment="Center"
+                                                   HorizontalAlignment="Right"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
 
-                        <!-- 時間 -->
-                        <DataGridTextColumn Header="時間(h)"
-                                            Binding="{Binding hours, UpdateSourceTrigger=PropertyChanged}"
-                                            Width="65"/>
+                            <!-- 操作（削除のみ。編集はダブルクリックで対応） -->
+                            <GridViewColumn Header="操作" Width="60">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="🗑"
+                                                Width="32" Height="22"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                FontSize="14"
+                                                Cursor="Hand"
+                                                Click="btn_delete_work_Click"
+                                                ToolTip="この行を削除"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
 
-                        <!-- ソフト・機材（オートコンプリート） -->
-                        <DataGridTemplateColumn Header="ソフト・機材" Width="120">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <ctrl:AutoCompleteTextBox
-                                        Text="{Binding software,
-                                               UpdateSourceTrigger=PropertyChanged,
-                                               Mode=TwoWay}"
-                                        ItemsSource="{Binding ElementName=this_dialog,
-                                                              Path=software_list}"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
+                <!-- 合計表示（行末） -->
+                <Border Grid.Row="2"
+                        Background="#EDF4FA"
+                        CornerRadius="4"
+                        Padding="12,8"
+                        Margin="0,8,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
 
-                        <!-- 料金 -->
-                        <DataGridTextColumn Header="料金"
-                                            Binding="{Binding software_cost, UpdateSourceTrigger=PropertyChanged}"
-                                            Width="65"/>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <TextBlock Text="合計作業時間："
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource brush_text_secondary}"
+                                       FontSize="12"/>
+                            <TextBlock x:Name="txt_total_hours"
+                                       Text="0h"
+                                       VerticalAlignment="Center"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource brush_text_primary}"
+                                       Margin="6,0,0,0"/>
+                        </StackPanel>
 
-                        <!-- 車両（オートコンプリート） -->
-                        <DataGridTemplateColumn Header="車両" Width="110">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <ctrl:AutoCompleteTextBox
-                                        Text="{Binding vehicle,
-                                               UpdateSourceTrigger=PropertyChanged,
-                                               Mode=TwoWay}"
-                                        ItemsSource="{Binding ElementName=this_dialog,
-                                                              Path=vehicle_list}"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock Text="残業対象："
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource brush_text_secondary}"
+                                       FontSize="12"/>
+                            <TextBlock x:Name="txt_overtime_target"
+                                       Text="0h"
+                                       VerticalAlignment="Center"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource brush_text_primary}"
+                                       Margin="6,0,0,0"/>
+                        </StackPanel>
 
-                        <!-- 発 -->
-                        <DataGridTextColumn Header="発"
-                                            Binding="{Binding from_location, UpdateSourceTrigger=PropertyChanged}"
-                                            Width="80"/>
-
-                        <!-- 着 -->
-                        <DataGridTextColumn Header="着"
-                                            Binding="{Binding to_location, UpdateSourceTrigger=PropertyChanged}"
-                                            Width="80"/>
-
-                        <!-- 距離 -->
-                        <DataGridTextColumn Header="距離"
-                                            Binding="{Binding distance, UpdateSourceTrigger=PropertyChanged}"
-                                            Width="55"/>
-
-                        <!-- 移動方法（オートコンプリート） -->
-                        <DataGridTemplateColumn Header="移動方法" Width="80">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <ctrl:AutoCompleteTextBox
-                                        Text="{Binding transport,
-                                               UpdateSourceTrigger=PropertyChanged,
-                                               Mode=TwoWay}"
-                                        ItemsSource="{Binding ElementName=this_dialog,
-                                                              Path=transport_list}"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-
-                        <!-- 備考 -->
-                        <DataGridTextColumn Header="備考"
-                                            Binding="{Binding note, UpdateSourceTrigger=PropertyChanged}"
-                                            Width="120"/>
-                    </DataGrid.Columns>
-                </DataGrid>
+                        <TextBlock Grid.Column="2"
+                                   x:Name="txt_achievement_badge"
+                                   Text=""
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource brush_success}"/>
+                    </Grid>
+                </Border>
             </Grid>
         </Border>
 
-        <!-- ===== 4段目：保存・キャンセル ===== -->
-        <StackPanel Grid.Row="4"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Margin="0,15,0,0">
-            <Button x:Name="btn_cancel"
-                    Content="キャンセル"
-                    Padding="20,8"
-                    Background="{StaticResource brush_bg_card}"
-                    BorderBrush="{StaticResource brush_border}"
-                    BorderThickness="1"
-                    FontSize="13"
-                    Cursor="Hand"
-                    Click="btn_cancel_Click"/>
-            <Button x:Name="btn_save"
-                    Content="💾 保存"
-                    Style="{StaticResource style_button_primary}"
-                    Margin="10,0,0,0"
-                    Click="btn_save_Click"/>
-        </StackPanel>
+        <!-- ============================================================ -->
+        <!-- ===== Footer：戻る・終了・保存 ============================== -->
+        <!-- ============================================================ -->
+        <Grid Grid.Row="4" Margin="0,15,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 戻る（左下） -->
+            <Button Grid.Column="0"
+                    x:Name="btn_back"
+                    Content="← 戻る"
+                    Style="{StaticResource style_button_local_secondary}"
+                    HorizontalAlignment="Left"
+                    Click="btn_back_Click"
+                    ToolTip="保存せずに閉じる（追加済みデータが破棄されます）"/>
+
+            <!-- 終了（赤）・保存（青）：右下 -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button x:Name="btn_exit"
+                        Content="終了"
+                        Style="{StaticResource style_button_local_danger}"
+                        Click="btn_exit_Click"
+                        ToolTip="保存せずに閉じる（誤クリック警告色）"/>
+
+                <Button x:Name="btn_save"
+                        Content="💾 保存"
+                        Style="{StaticResource style_button_primary}"
+                        Margin="10,0,0,0"
+                        Click="btn_save_Click"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

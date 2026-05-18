@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Dapper;
 using EA_DailyReport.Data;
@@ -15,15 +16,21 @@ using EA_DailyReport.Services;
 namespace EA_DailyReport.Views.Dialogs
 {
     /// <summary>
-    /// 日報入力ダイアログ（v0.1.6 大幅改修）
-    /// 出退勤・氏名選択・作業行（複数）・自動算出（早朝・残業・深夜）に対応
+    /// 日報入力ダイアログ（v0.1.8 全面書き直し版・UI のみ刷新）
     ///
-    /// ▼ v0.1.6 追加機能：
-    /// ・マスタ（氏名/区分/業務名/ソフト/車両/移動方法）を NAS取得済みローカルDBから読込
-    /// ・DataGrid セルにオートコンプリート（AutoCompleteTextBox）
-    /// ・氏名のデフォルトに UserSession のユーザー名を自動入力
-    /// ・編集モード時は出退勤・場所をロック表示・「🔓 ロック解除」ボタンで解除
-    /// ・新規モードで「同じ日 × 同じ人」の既存日報があれば自動的にロックモードへ
+    /// ▼ v0.1.8 改修方針（ロジック温存・UI 全面書き直し）：
+    /// ・DataGrid 直編集 → 「単一作業フォーム + 追加済み一覧」のハイブリッド方式へ移行
+    /// ・Tab キー駆動の高速入力に対応
+    /// ・職種・区分詳細・作業時間残の自動表示を新規追加
+    /// ・戻る・終了・保存の3ボタン体系に変更（終了は赤・誤クリック警告）
+    /// ・閉じる前に状態別の確認ダイアログを表示
+    ///
+    /// ▼ v0.1.6 → v0.1.8 で温存しているロジック：
+    /// ・マスタロード（load_master_data_async / load_employees_combo_async）
+    /// ・既存日報検出 + 出退勤ロック（check_existing_and_lock_async / lock_time_fields）
+    /// ・早朝・残業・深夜の自動算出（recalculate / WorkTimeCalculator 依存）
+    /// ・DB 保存（DailyReportService.save_async）
+    /// ・編集モード時の既存読込（load_existing_async）
     ///
     /// コンストラクタの daily_report_id：
     ///   0  → 新規入力モード
@@ -34,17 +41,25 @@ namespace EA_DailyReport.Views.Dialogs
         private readonly int _editing_id;
         private DailyReport? _editing_report;
 
-        // DataGrid のバインドソース（ObservableCollection で行追加・削除を即時反映）
+        // ListView のバインドソース（ObservableCollection で行追加・削除を即時反映）
         private ObservableCollection<WorkDetail> _details = new();
 
-        // ▼ v0.1.6 内部状態
-        // 「同じ日 × 同じ人」で既存日報が見つかったときに自動セットされる
-        // ロック中は出退勤・場所の編集を抑止する
+        // ▼ v0.1.6 内部状態：既存日報検出時のロック制御
         private bool _is_locked = false;
 
+        // ▼ 追加：v0.1.8 編集中作業のインデックス
+        // -1     → 新規追加モード（[追加] ボタン表示）
+        // 0 以上 → 既存項目の編集モード（[更新][編集キャンセル] ボタン表示）
+        private int _editing_work_index = -1;
+
+        // ▼ 追加：v0.1.8 定時時間の基準（Sprint 1 は固定 8.0h）
+        // Sprint 2 で employee_work_settings 参照に切り替え予定
+        private const double STANDARD_WORK_HOURS = 8.0;
+
         // ────────────────────────────────────────────────
-        // ▼ v0.1.6 マスタリスト（DataGrid セルの AutoCompleteTextBox にバインド）
-        // public プロパティ + INotifyPropertyChanged で XAML から ElementName 経由で参照される
+        // ▼ v0.1.6 マスタリスト（AutoCompleteTextBox の ItemsSource 経由でバインド）
+        // 各 ControlsAutoCompleteTextBox は ItemsSource={Binding ElementName=this_dialog, Path=xxx_list}
+        // で参照する。INotifyPropertyChanged で更新通知を発火する。
         // ────────────────────────────────────────────────
 
         private List<string> _category_list = new();
@@ -90,9 +105,9 @@ namespace EA_DailyReport.Views.Dialogs
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         }
 
-        // ────────────────────────────────────────────────
+        // ════════════════════════════════════════════════
         // コンストラクタ
-        // ────────────────────────────────────────────────
+        // ════════════════════════════════════════════════
 
         /// <summary>新規入力モード</summary>
         public InputDialog() : this(0) { }
@@ -108,13 +123,23 @@ namespace EA_DailyReport.Views.Dialogs
                 ? "日報入力（新規）"
                 : "日報編集";
 
-            grid_details.ItemsSource = _details;
+            // ▼ 修正：v0.1.8 grid_details → lst_added_works に変更
+            lst_added_works.ItemsSource = _details;
+
+            // _details の変更時に表示更新（合計時間・残業対象・達成バッジ）
+            _details.CollectionChanged += (s, ev) =>
+            {
+                update_totals_display();
+                update_hours_remaining();
+                update_list_section_label();
+            };
+
             Loaded += on_loaded;
         }
 
-        // ────────────────────────────────────────────────
+        // ════════════════════════════════════════════════
         // 初期化
-        // ────────────────────────────────────────────────
+        // ════════════════════════════════════════════════
 
         private async void on_loaded(object sender, RoutedEventArgs e)
         {
@@ -137,21 +162,31 @@ namespace EA_DailyReport.Views.Dialogs
                 init_for_new_input();
                 // 自動入力した氏名で重複チェック → 既存あればロック
                 await check_existing_and_lock_async();
+                // 氏名から職種を自動表示
+                await load_job_type_for_employee_async();
             }
 
             // 初回の自動算出
             recalculate();
+
+            // 表示の初期化
+            update_totals_display();
+            update_hours_remaining();
+            update_list_section_label();
         }
 
+        // ────────────────────────────────────────────────
+        // ▼ v0.1.6 マスタロード（既存ロジックをそのまま温存）
+        // ────────────────────────────────────────────────
+
         /// <summary>
-        /// ▼ 追加：v0.1.6
         /// マスタリスト（区分・業務名・ソフト・車両）を ローカルDB から読み込む
         /// AutoCompleteTextBox のバインドソースになる
         ///
         /// データソース：
-        ///   ・区分・業務名 → projects テーブル（NAS から取得済み・78件）
-        ///   ・ソフト・機材 → equipment_rates テーブル（NAS から取得済み・13件）
-        ///   ・車両         → vehicles テーブル（NAS から取得済み・4件）
+        ///   ・区分・業務名 → projects テーブル
+        ///   ・ソフト・機材 → equipment_rates テーブル
+        ///   ・車両         → vehicles テーブル
         /// </summary>
         private async Task load_master_data_async()
         {
@@ -167,8 +202,7 @@ namespace EA_DailyReport.Views.Dialogs
                 ")).ToList();
                 category_list = categories;
 
-                // 業務名（projects.site_name + project_name 結合）
-                // CostManager のスキーマ：site_name = "鳥居水門" など
+                // 業務名（projects.site_name）
                 var sites = (await conn.QueryAsync<string>(@"
                     SELECT DISTINCT site_name FROM projects
                     WHERE is_active = 1 AND site_name IS NOT NULL AND site_name <> ''
@@ -177,7 +211,6 @@ namespace EA_DailyReport.Views.Dialogs
                 project_name_list = sites;
 
                 // ソフト・機材（equipment_rates.equipment_name）
-                // テーブルが無い環境もあるため try-catch で吸収
                 var softwares = new List<string> { "なし" };
                 try
                 {
@@ -188,7 +221,7 @@ namespace EA_DailyReport.Views.Dialogs
                     ")).ToList();
                     softwares.AddRange(s);
                 }
-                catch { /* テーブル無しは無視（「なし」だけ表示） */ }
+                catch { /* テーブル無しは無視 */ }
                 software_list = softwares;
 
                 // 車両（vehicles.vehicle_name）
@@ -204,8 +237,6 @@ namespace EA_DailyReport.Views.Dialogs
                 }
                 catch { /* テーブル無しは無視 */ }
                 vehicle_list = vehicles;
-
-                // 移動方法は固定リスト（既に初期化済み）
             }
             catch (Exception ex)
             {
@@ -242,9 +273,51 @@ namespace EA_DailyReport.Views.Dialogs
         }
 
         // ────────────────────────────────────────────────
+        // ▼ 追加：v0.1.8 職種の自動表示（要件㉒）
+        // ────────────────────────────────────────────────
+
+        /// <summary>
+        /// 選択中の氏名から職種を取得して txt_job_type に自動表示する
+        /// employees テーブルから employee_name で検索
+        /// 未登録または取得失敗時は空欄
+        /// </summary>
+        private async Task load_job_type_for_employee_async()
+        {
+            string name = cmb_employee.Text?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                txt_job_type.Text = "";
+                return;
+            }
+
+            try
+            {
+                using var conn = database_manager.create_connection();
+                var job = await conn.QueryFirstOrDefaultAsync<string>(@"
+                    SELECT job_type FROM employees
+                    WHERE employee_name = @name AND is_active = 1
+                    LIMIT 1",
+                    new { name });
+
+                txt_job_type.Text = job ?? "";
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[InputDialog] 職種取得失敗（空欄で継続）: {ex.Message}");
+                txt_job_type.Text = "";
+            }
+        }
+
+        // ────────────────────────────────────────────────
         // 新規入力時の初期化
         // ────────────────────────────────────────────────
 
+        /// <summary>
+        /// ▼ 修正：v0.1.8 _details に空行を追加しなくなった
+        /// 旧：DataGrid に1行追加していた
+        /// 新：フォーム駆動のため一覧は空のスタートでよい
+        /// </summary>
         private void init_for_new_input()
         {
             dp_report_date.SelectedDate = DateTime.Today;
@@ -253,42 +326,21 @@ namespace EA_DailyReport.Views.Dialogs
             cmb_start_location.Text = "本社";
             cmb_end_location.Text = "本社";
 
-            // ▼ 追加：v0.1.6 氏名のデフォルト自動入力
-            // App.xaml.cs の起動フローで UserSession.set(...) されている想定
-            // 取得失敗時は空のまま（後でユーザーが手入力）
+            // ▼ v0.1.6 氏名のデフォルト自動入力
             try_set_default_employee_name();
 
-            // 空の作業詳細1行をデフォルトで追加
-            _details.Add(new WorkDetail
-            {
-                category_code = "",
-                project_name = "",
-                detail = "",
-                hours = 0,
-                software = "なし",
-                software_cost = 0,
-                vehicle = "なし",
-                from_location = "-",
-                to_location = "-",
-                distance = 0,
-                transport = "-",
-                note = "",
-                sort_order = 0,
-            });
+            // ▼ 修正：v0.1.8 フォームに初期値をセット（_details への追加は廃止）
+            clear_work_form();
         }
 
         /// <summary>
-        /// ▼ 修正：v0.1.7
-        /// 氏名のデフォルトをアクセス中ユーザーから取得して設定する
-        /// UserSession.user_name を直接呼び出し（v0.1.6 のリフレクションは削除）
-        /// 失敗時は空のまま（ユーザーが手入力）
+        /// ▼ v0.1.7 氏名のデフォルトをアクセス中ユーザーから取得して設定する
+        /// UserSession.user_name を呼び出し
         /// </summary>
         private void try_set_default_employee_name()
         {
             try
             {
-                // UserSession は EA_DailyReport プロジェクト内に存在する想定
-                // App.xaml.cs の起動フローで UserSession.set(...) されている
                 if (UserSession.is_logged_in
                  && !string.IsNullOrWhiteSpace(UserSession.user_name))
                 {
@@ -297,7 +349,7 @@ namespace EA_DailyReport.Views.Dialogs
             }
             catch
             {
-                // UserSession 未初期化等は無視（ユーザーが手入力で対応）
+                // UserSession 未初期化等は無視
             }
         }
 
@@ -305,6 +357,10 @@ namespace EA_DailyReport.Views.Dialogs
         // 既存日報の読込（編集モード）
         // ────────────────────────────────────────────────
 
+        /// <summary>
+        /// ▼ 修正：v0.1.8 grid_details → _details / lst_added_works に変更
+        /// ロジックは温存。最後の「1行も無ければ空行追加」は削除（フォーム駆動のため）
+        /// </summary>
         private async Task load_existing_async()
         {
             try
@@ -337,6 +393,9 @@ namespace EA_DailyReport.Views.Dialogs
                 cmb_start_location.Text = _editing_report.start_location;
                 cmb_end_location.Text = _editing_report.end_location;
 
+                // 職種を自動表示
+                await load_job_type_for_employee_async();
+
                 // work_details 取得（論理削除済みは除外）
                 var details = (await conn.QueryAsync<WorkDetail>(
                     "SELECT * FROM work_details WHERE daily_report_id = @id AND is_deleted = 0 ORDER BY sort_order, id",
@@ -345,9 +404,11 @@ namespace EA_DailyReport.Views.Dialogs
                 _details.Clear();
                 foreach (var d in details) _details.Add(d);
 
-                // 1行も無ければ空行を追加
-                if (_details.Count == 0)
-                    _details.Add(new WorkDetail { software = "なし", vehicle = "なし", from_location = "-", to_location = "-", transport = "-" });
+                // ▼ 修正：v0.1.8 「1行も無ければ空行追加」を廃止（フォーム駆動）
+                // 旧：if (_details.Count == 0) _details.Add(new WorkDetail { ... });
+
+                // フォームは空のままにしておく
+                clear_work_form();
             }
             catch (Exception ex)
             {
@@ -360,41 +421,33 @@ namespace EA_DailyReport.Views.Dialogs
         }
 
         // ────────────────────────────────────────────────
-        // ▼ 追加：v0.1.6 ロック / アンロック制御（VBA 同等）
+        // ▼ v0.1.6 ロック / アンロック制御（VBA 同等・温存）
         // ────────────────────────────────────────────────
 
         /// <summary>
         /// 出退勤・場所コントロールを「ロック」状態にする
-        /// VBA の LockTimeFields() に相当
-        /// グレー背景 + IsReadOnly=true / IsEnabled=false で「触れない感」を出す
         /// </summary>
-        /// <param name="show_warning">既存日報警告バッジを表示するか</param>
         private void lock_time_fields(bool show_warning)
         {
             _is_locked = true;
 
-            // 出退勤 TextBox：IsReadOnly + 灰色背景
             var locked_bg = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0));
             txt_clock_in.IsReadOnly = true;
             txt_clock_in.Background = locked_bg;
             txt_clock_out.IsReadOnly = true;
             txt_clock_out.Background = locked_bg;
 
-            // 場所 ComboBox：IsEnabled=false で完全に触れなくする
             cmb_start_location.IsEnabled = false;
             cmb_end_location.IsEnabled = false;
 
-            // 「🔓 ロック解除」ボタンを表示
             btn_unlock.Visibility = Visibility.Visible;
 
-            // 「既存日報あり」バッジ表示
             if (show_warning)
                 border_existing_warning.Visibility = Visibility.Visible;
         }
 
         /// <summary>
         /// 出退勤・場所コントロールを「編集可能」状態に戻す
-        /// VBA の NotLockTimeFields() に相当
         /// </summary>
         private void unlock_time_fields()
         {
@@ -410,21 +463,18 @@ namespace EA_DailyReport.Views.Dialogs
             cmb_end_location.IsEnabled = true;
 
             btn_unlock.Visibility = Visibility.Collapsed;
-            // 警告バッジは表示したまま（「既存日報を編集中」の事実は変わらないため）
         }
 
         /// <summary>
         /// 「🔓 ロック解除」ボタンハンドラ
         /// 確認ダイアログで意思確認してからロック解除する
-        /// 解除後の保存時、出退勤更新は親レコードに対して1セットのみ反映される
-        /// （構造的に「2つの時間が存在する」事態は発生しない）
         /// </summary>
         private void btn_unlock_Click(object sender, RoutedEventArgs e)
         {
             var result = MessageBox.Show(
-                "出退勤と場所を編集可能にします。\n\n" +
+                "出退勤と場所を編集可能にいたします。\n\n" +
                 "保存すると、この日のあなたの出退勤情報（全作業行に共通）が更新されます。\n" +
-                "本当によろしいですか？",
+                "本当によろしいでしょうか？",
                 "ロック解除の確認",
                 MessageBoxButton.OKCancel,
                 MessageBoxImage.Question);
@@ -436,20 +486,35 @@ namespace EA_DailyReport.Views.Dialogs
         }
 
         // ────────────────────────────────────────────────
-        // ▼ 追加：v0.1.6 重複チェック（新規モード時の自動ロック）
+        // ▼ v0.1.6 重複チェック（新規モード時の自動ロック・温存）
         // ────────────────────────────────────────────────
 
         /// <summary>
-        /// 日付・氏名コンボの変更時に呼ばれる
-        /// 新規モードのみ動作（編集モードは初期状態で固定ロック）
+        /// 日付変更時に呼ばれる（DatePicker.SelectedDateChanged）
+        /// 新規モードのみ動作
         /// </summary>
         private async void report_date_or_name_changed(object sender, RoutedEventArgs e)
         {
-            // 編集モード or ロード前は何もしない
             if (_editing_id > 0) return;
             if (!IsLoaded) return;
 
             await check_existing_and_lock_async();
+        }
+
+        /// <summary>
+        /// ▼ 追加：v0.1.8
+        /// 氏名コンボ変更時に呼ばれる（SelectionChanged / LostFocus）
+        /// ・既存日報チェック（ロック制御）
+        /// ・職種の自動表示
+        /// 新規モードのみ動作
+        /// </summary>
+        private async void cmb_employee_changed(object sender, RoutedEventArgs e)
+        {
+            if (_editing_id > 0) return;
+            if (!IsLoaded) return;
+
+            await check_existing_and_lock_async();
+            await load_job_type_for_employee_async();
         }
 
         /// <summary>
@@ -476,7 +541,6 @@ namespace EA_DailyReport.Views.Dialogs
 
                 if (existing != null)
                 {
-                    // 既存値を表示してロック
                     txt_clock_in.Text = existing.clock_in ?? "";
                     txt_clock_out.Text = existing.clock_out ?? "";
                     cmb_start_location.Text = existing.start_location ?? "本社";
@@ -486,7 +550,6 @@ namespace EA_DailyReport.Views.Dialogs
                 }
                 else
                 {
-                    // 既存なし → ロック解除
                     if (_is_locked) unlock_time_fields();
                     border_existing_warning.Visibility = Visibility.Collapsed;
                 }
@@ -499,27 +562,20 @@ namespace EA_DailyReport.Views.Dialogs
         }
 
         // ────────────────────────────────────────────────
-        // 出退勤の自動算出（早朝・残業・深夜）
+        // 出退勤の自動算出（早朝・残業・深夜・温存）
         // ────────────────────────────────────────────────
 
-        /// <summary>
-        /// 出勤・退勤の TextBox 変更時に呼ばれる
-        /// 自動算出ラベル（早朝・残業・深夜）を即時更新する
-        /// </summary>
         private void time_or_settings_changed(object sender, TextChangedEventArgs e)
         {
             recalculate();
         }
 
+        /// <summary>
+        /// ▼ v0.1.6 既存ロジック温存：早朝/残業/深夜の表示更新
+        /// </summary>
         private void recalculate()
         {
-            // ▼ 修正：v0.1.6 バグ対応
-            // WPF の InitializeComponent() 中、XAML で Text="08:30" を持つ TextBox が
-            // 生成された瞬間に TextChanged イベントが発火する。
-            // その時点ではまだ後続の TextBox（txt_clock_out 等）が null のため、
-            // 参照すると NullReferenceException が発生する。
-            // → null の場合は何もせず即 return する
-            //   （on_loaded での明示的な recalculate() 呼び出しで再計算されるため問題なし）
+            // InitializeComponent 中の TextChanged 発火対策
             if (txt_clock_in == null || txt_clock_out == null) return;
             if (txt_calc_early == null
                 || txt_calc_overtime == null
@@ -530,7 +586,6 @@ namespace EA_DailyReport.Views.Dialogs
 
             if (ti == null || to == null)
             {
-                // 不正な時刻フォーマット → 0:00 表示
                 txt_calc_early.Text = "0:00";
                 txt_calc_overtime.Text = "0:00";
                 txt_calc_late_night.Text = "0:00";
@@ -543,51 +598,500 @@ namespace EA_DailyReport.Views.Dialogs
             txt_calc_late_night.Text = WorkTimeCalculator.format_minutes(calc.late_night_min);
         }
 
-        // ────────────────────────────────────────────────
-        // 作業詳細の行追加・削除
-        // ────────────────────────────────────────────────
+        // ════════════════════════════════════════════════
+        // ▼ 追加：v0.1.8 区分詳細の自動表示
+        // ════════════════════════════════════════════════
 
-        /// <summary>「+ 行追加」ボタン → 末尾に空行を追加</summary>
-        private void btn_add_row_Click(object sender, RoutedEventArgs e)
+        /// <summary>
+        /// 区分の AutoCompleteTextBox の LostFocus 時に呼ばれる
+        /// projects.detail を引いて区分詳細を表示
+        /// </summary>
+        private async void txt_category_LostFocus(object sender, RoutedEventArgs e)
         {
-            _details.Add(new WorkDetail
-            {
-                software = "なし",
-                vehicle = "なし",
-                from_location = "-",
-                to_location = "-",
-                transport = "-",
-                sort_order = _details.Count,
-            });
+            await load_category_detail_async();
         }
 
-        /// <summary>「- 選択行削除」ボタン → DataGrid 選択行を削除</summary>
-        private void btn_remove_row_Click(object sender, RoutedEventArgs e)
+        /// <summary>
+        /// 現在の区分から projects.detail を取得して txt_category_detail に表示
+        /// </summary>
+        private async Task load_category_detail_async()
         {
-            if (grid_details.SelectedItem is WorkDetail d)
+            string code = txt_category.Text?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(code))
             {
-                _details.Remove(d);
+                txt_category_detail.Text = "";
+                return;
+            }
+
+            try
+            {
+                using var conn = database_manager.create_connection();
+                var detail = await conn.QueryFirstOrDefaultAsync<string>(@"
+                    SELECT detail FROM projects
+                    WHERE category_code = @code AND is_active = 1
+                    LIMIT 1",
+                    new { code });
+
+                txt_category_detail.Text = detail ?? "";
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[InputDialog] 区分詳細取得失敗（空欄で継続）: {ex.Message}");
+                txt_category_detail.Text = "";
+            }
+        }
+
+        // ════════════════════════════════════════════════
+        // ▼ 追加：v0.1.8 作業時間残・合計表示の自動更新
+        // ════════════════════════════════════════════════
+
+        /// <summary>
+        /// 作業時間 TextBox の変更時に呼ばれる
+        /// 作業時間残を再計算して表示更新
+        /// </summary>
+        private void txt_hours_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (!IsLoaded) return;
+            update_hours_remaining();
+        }
+
+        /// <summary>
+        /// 作業時間残を計算して txt_hours_remaining に表示
+        /// 計算式：STANDARD_WORK_HOURS − (一覧合計 + フォーム入力中の時間)
+        /// 編集モード時：一覧合計から編集中の項目を除外（フォーム値で代替）
+        /// </summary>
+        private void update_hours_remaining()
+        {
+            if (txt_hours_remaining == null) return;
+
+            double form_hours = 0;
+            if (!string.IsNullOrWhiteSpace(txt_hours?.Text))
+                double.TryParse(txt_hours.Text, out form_hours);
+
+            // 一覧内の合計（編集中の項目は除外する）
+            double list_hours = 0;
+            for (int i = 0; i < _details.Count; i++)
+            {
+                if (i == _editing_work_index) continue;  // 編集中は除外
+                list_hours += _details[i].hours;
+            }
+
+            double total_used = list_hours + form_hours;
+            double remaining = STANDARD_WORK_HOURS - total_used;
+
+            // 表示書式：マイナスは「+Xh 超過」、プラスは「Xh」
+            if (remaining < 0)
+            {
+                txt_hours_remaining.Text = $"+{Math.Abs(remaining):0.##}h 超過";
+                txt_hours_remaining.Foreground = new SolidColorBrush(Color.FromRgb(0xDC, 0x26, 0x26));
             }
             else
             {
-                MessageBox.Show(
-                    "削除する行を選択してください。",
-                    "選択なし",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                txt_hours_remaining.Text = $"{remaining:0.##}h";
+                txt_hours_remaining.Foreground = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B));
             }
         }
 
+        /// <summary>
+        /// 合計作業時間・残業対象・達成バッジを表示更新
+        /// </summary>
+        private void update_totals_display()
+        {
+            if (txt_total_hours == null) return;
+
+            double total = _details.Sum(d => d.hours);
+
+            txt_total_hours.Text = $"{total:0.##}h";
+
+            // 残業対象 = max(0, 合計 - 定時)
+            double overtime = Math.Max(0, total - STANDARD_WORK_HOURS);
+            txt_overtime_target.Text = $"{overtime:0.##}h";
+
+            // 達成バッジ
+            if (total >= STANDARD_WORK_HOURS)
+                txt_achievement_badge.Text = $"✓ 定時（{STANDARD_WORK_HOURS}h）達成";
+            else
+                txt_achievement_badge.Text = "";
+        }
+
+        /// <summary>
+        /// 一覧セクションの見出し更新（件数表示）
+        /// </summary>
+        private void update_list_section_label()
+        {
+            if (txt_list_section_label == null) return;
+            txt_list_section_label.Text = $"本日追加済み作業（{_details.Count}件）";
+        }
+
+        // ════════════════════════════════════════════════
+        // ▼ 追加：v0.1.8 作業の追加・更新・編集キャンセル・削除
+        // ════════════════════════════════════════════════
+
+        /// <summary>
+        /// 「＋ この作業を追加」ボタン
+        /// フォーム入力値を _details に追加 → フォームクリア → カーソルを区分欄に戻す
+        /// </summary>
+        private void btn_add_work_Click(object sender, RoutedEventArgs e)
+        {
+            var work = extract_work_from_form();
+
+            // 入力検証：区分または業務名がいずれも空なら警告
+            if (string.IsNullOrWhiteSpace(work.category_code)
+             && string.IsNullOrWhiteSpace(work.project_name))
+            {
+                MessageBox.Show(
+                    "区分または業務名のいずれかを入力してください。",
+                    "入力不足",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
+            work.sort_order = _details.Count;
+            _details.Add(work);
+
+            clear_work_form();
+
+            // カーソルを区分欄に戻す（次の入力をスムーズに）
+            txt_category.Focus();
+        }
+
+        /// <summary>
+        /// 「✓ 更新」ボタン（編集モード時のみ表示）
+        /// 編集中の _details インデックスをフォーム値で上書き
+        /// </summary>
+        private void btn_update_work_Click(object sender, RoutedEventArgs e)
+        {
+            if (_editing_work_index < 0 || _editing_work_index >= _details.Count)
+            {
+                exit_edit_mode();
+                return;
+            }
+
+            var work = extract_work_from_form();
+
+            if (string.IsNullOrWhiteSpace(work.category_code)
+             && string.IsNullOrWhiteSpace(work.project_name))
+            {
+                MessageBox.Show(
+                    "区分または業務名のいずれかを入力してください。",
+                    "入力不足",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
+            // 既存項目の id / sort_order などのキー情報は維持
+            var original = _details[_editing_work_index];
+            work.id = original.id;
+            work.daily_report_id = original.daily_report_id;
+            work.sort_order = original.sort_order;
+            work.created_at = original.created_at;
+
+            _details[_editing_work_index] = work;
+
+            exit_edit_mode();
+            clear_work_form();
+            txt_category.Focus();
+        }
+
+        /// <summary>
+        /// 「編集キャンセル」ボタン（編集モード時のみ表示）
+        /// フォームをクリアして新規追加モードに戻る
+        /// </summary>
+        private void btn_cancel_edit_Click(object sender, RoutedEventArgs e)
+        {
+            exit_edit_mode();
+            clear_work_form();
+        }
+
+        /// <summary>
+        /// 追加済み一覧のダブルクリック
+        /// 該当行をフォームに復元 → 編集モードに移行
+        /// </summary>
+        private void lst_added_works_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (lst_added_works.SelectedItem is WorkDetail work)
+            {
+                int index = _details.IndexOf(work);
+                if (index >= 0)
+                {
+                    load_work_to_form(work);
+                    enter_edit_mode(index);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 一覧の行内 [🗑] ボタンクリック
+        /// 該当作業を _details から削除
+        /// 編集中の項目を削除した場合は編集モード解除
+        /// </summary>
+        private void btn_delete_work_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button btn || btn.DataContext is not WorkDetail work) return;
+
+            int target_index = _details.IndexOf(work);
+            if (target_index < 0) return;
+
+            var result = MessageBox.Show(
+                $"この作業を一覧から削除いたします。\n\n" +
+                $"区分: {work.category_code}\n" +
+                $"業務名: {work.project_name}\n" +
+                $"内容: {work.detail}\n\n" +
+                $"よろしいでしょうか？",
+                "削除の確認",
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.OK) return;
+
+            // 編集中の項目を削除する場合は編集モード解除
+            if (_editing_work_index == target_index)
+            {
+                exit_edit_mode();
+                clear_work_form();
+            }
+            else if (target_index < _editing_work_index)
+            {
+                // インデックスがずれるので補正
+                _editing_work_index--;
+            }
+
+            _details.Remove(work);
+        }
+
         // ────────────────────────────────────────────────
-        // 保存・キャンセル
+        // 編集モード制御・フォーム操作ヘルパー
         // ────────────────────────────────────────────────
+
+        /// <summary>編集モードへ移行</summary>
+        private void enter_edit_mode(int index)
+        {
+            _editing_work_index = index;
+
+            btn_add_work.Visibility = Visibility.Collapsed;
+            btn_update_work.Visibility = Visibility.Visible;
+            btn_cancel_edit.Visibility = Visibility.Visible;
+
+            txt_form_section_label.Text = "作業編集中（ダブルクリック元の行を修正中）";
+            txt_edit_mode_banner_text.Text = $"📝 編集中：{index + 1} 件目を修正しています";
+            border_edit_mode_banner.Visibility = Visibility.Visible;
+
+            update_hours_remaining();
+        }
+
+        /// <summary>新規追加モードへ戻る</summary>
+        private void exit_edit_mode()
+        {
+            _editing_work_index = -1;
+
+            btn_add_work.Visibility = Visibility.Visible;
+            btn_update_work.Visibility = Visibility.Collapsed;
+            btn_cancel_edit.Visibility = Visibility.Collapsed;
+
+            txt_form_section_label.Text = "作業入力（1作業ずつ・Tab で次フィールドへ）";
+            border_edit_mode_banner.Visibility = Visibility.Collapsed;
+
+            update_hours_remaining();
+        }
+
+        /// <summary>フォームを初期値で埋める（クリア）</summary>
+        private void clear_work_form()
+        {
+            txt_category.Text = "";
+            txt_category_detail.Text = "";
+            txt_project_name.Text = "";
+            txt_detail.Text = "";
+            txt_note.Text = "";
+            txt_hours.Text = "";
+            txt_software.Text = "なし";
+            txt_vehicle.Text = "なし";
+            txt_transport.Text = "-";
+            txt_from_location.Text = "-";
+            txt_to_location.Text = "-";
+            txt_distance.Text = "0";
+        }
+
+        /// <summary>WorkDetail の値をフォームにロード（編集モード移行時）</summary>
+        private void load_work_to_form(WorkDetail work)
+        {
+            txt_category.Text = work.category_code ?? "";
+            txt_project_name.Text = work.project_name ?? "";
+            txt_detail.Text = work.detail ?? "";
+            txt_note.Text = work.note ?? "";
+            txt_hours.Text = work.hours.ToString();
+            txt_software.Text = string.IsNullOrEmpty(work.software) ? "なし" : work.software;
+            txt_vehicle.Text = string.IsNullOrEmpty(work.vehicle) ? "なし" : work.vehicle;
+            txt_transport.Text = string.IsNullOrEmpty(work.transport) ? "-" : work.transport;
+            txt_from_location.Text = string.IsNullOrEmpty(work.from_location) ? "-" : work.from_location;
+            txt_to_location.Text = string.IsNullOrEmpty(work.to_location) ? "-" : work.to_location;
+            txt_distance.Text = work.distance.ToString();
+
+            // 区分詳細を非同期で取得（待たずに進める）
+            _ = load_category_detail_async();
+        }
+
+        /// <summary>フォームの値から WorkDetail オブジェクトを生成</summary>
+        private WorkDetail extract_work_from_form()
+        {
+            double.TryParse(txt_hours.Text, out double hours);
+            double.TryParse(txt_distance.Text, out double distance);
+
+            return new WorkDetail
+            {
+                category_code = txt_category.Text?.Trim() ?? "",
+                project_name = txt_project_name.Text?.Trim() ?? "",
+                detail = txt_detail.Text?.Trim() ?? "",
+                note = txt_note.Text?.Trim() ?? "",
+                hours = hours,
+                software = string.IsNullOrWhiteSpace(txt_software.Text) ? "なし" : txt_software.Text.Trim(),
+                software_cost = 0,  // Sprint 2 でマスタ参照による自動設定検討
+                vehicle = string.IsNullOrWhiteSpace(txt_vehicle.Text) ? "なし" : txt_vehicle.Text.Trim(),
+                transport = string.IsNullOrWhiteSpace(txt_transport.Text) ? "-" : txt_transport.Text.Trim(),
+                from_location = string.IsNullOrWhiteSpace(txt_from_location.Text) ? "-" : txt_from_location.Text.Trim(),
+                to_location = string.IsNullOrWhiteSpace(txt_to_location.Text) ? "-" : txt_to_location.Text.Trim(),
+                distance = distance,
+                sort_order = 0,  // 保存時に再設定
+            };
+        }
+
+        /// <summary>フォームに何か入力がされているかをチェック</summary>
+        private bool is_form_dirty()
+        {
+            return !string.IsNullOrWhiteSpace(txt_category.Text)
+                || !string.IsNullOrWhiteSpace(txt_project_name.Text)
+                || !string.IsNullOrWhiteSpace(txt_detail.Text)
+                || !string.IsNullOrWhiteSpace(txt_note.Text)
+                || (!string.IsNullOrWhiteSpace(txt_hours.Text) && txt_hours.Text != "0");
+        }
+
+        // ════════════════════════════════════════════════
+        // ▼ 追加：v0.1.8 スタブボタン（Phase 2 / Sprint 2 で実装予定）
+        // ════════════════════════════════════════════════
+
+        /// <summary>「区分リスト」ボタン（Phase 2 で実装）</summary>
+        private void btn_open_category_list_Click(object sender, RoutedEventArgs e)
+        {
+            MessageBox.Show(
+                "区分リスト機能は次の更新で実装予定でございます。",
+                "未実装",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+
+        /// <summary>「MAP」ボタン（Sprint 2 で実装）</summary>
+        private void btn_map_Click(object sender, RoutedEventArgs e)
+        {
+            MessageBox.Show(
+                "Google Maps 連携機能は Sprint 2 で実装予定でございます。",
+                "未実装",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+
+        // ════════════════════════════════════════════════
+        // ▼ 追加：v0.1.8 戻る・終了ボタン（閉じる前確認）
+        // ════════════════════════════════════════════════
+
+        /// <summary>「← 戻る」ボタン</summary>
+        private void btn_back_Click(object sender, RoutedEventArgs e)
+        {
+            if (show_close_confirmation())
+            {
+                DialogResult = false;
+                Close();
+            }
+        }
+
+        /// <summary>「終了」ボタン（赤・誤クリック警告色）</summary>
+        private void btn_exit_Click(object sender, RoutedEventArgs e)
+        {
+            if (show_close_confirmation())
+            {
+                DialogResult = false;
+                Close();
+            }
+        }
+
+        /// <summary>
+        /// 閉じる前の状態別確認ダイアログ
+        /// 戻り値：true = 閉じてよい / false = キャンセル（開いたまま）
+        ///
+        /// 状態別の挙動：
+        ///   A. 一覧空 + フォーム空 → 確認なしで閉じる
+        ///   B. 一覧空 + フォーム入力中 → 「破棄して閉じる」確認
+        ///   C. 一覧に項目あり → 「保存して閉じる / 破棄して閉じる / キャンセル」3択
+        ///      Yes/No/Cancel のボタンキャプションは MessageBox 仕様により固定（はい/いいえ/キャンセル）
+        ///      意味づけはメッセージ本文で説明
+        /// </summary>
+        private bool show_close_confirmation()
+        {
+            bool form_dirty = is_form_dirty();
+            int list_count = _details.Count;
+
+            // 状態 A：何もない
+            if (list_count == 0 && !form_dirty)
+            {
+                return true;
+            }
+
+            // 状態 B：一覧空・フォームのみ入力あり
+            if (list_count == 0 && form_dirty)
+            {
+                var result = MessageBox.Show(
+                    "入力中のデータは破棄されます。\n閉じてもよろしいでしょうか？",
+                    "閉じる前の確認",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+                return result == MessageBoxResult.Yes;
+            }
+
+            // 状態 C：一覧に項目あり（未保存）
+            var msg = $"追加済みの作業 {list_count} 件は保存されておりません。\n\n" +
+                      $"[はい]　　　 保存して閉じる\n" +
+                      $"[いいえ]　　 破棄して閉じる\n" +
+                      $"[キャンセル] このまま続ける";
+
+            var choice = MessageBox.Show(
+                msg,
+                "閉じる前の確認",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Warning);
+
+            if (choice == MessageBoxResult.Yes)
+            {
+                // 保存して閉じる → btn_save_Click のロジックを呼ぶ
+                // 保存成功時は DialogResult=true で Close される
+                // 保存失敗時は開いたままにしたいので false 返却
+                btn_save_Click(null!, null!);
+                // btn_save_Click 内で Close() するため、ここに来る時点で表示中なら失敗
+                return false;
+            }
+            else if (choice == MessageBoxResult.No)
+            {
+                // 破棄して閉じる
+                return true;
+            }
+            else
+            {
+                // キャンセル（開いたまま）
+                return false;
+            }
+        }
+
+        // ════════════════════════════════════════════════
+        // 保存処理（v0.1.6 ロジック温存・微修正）
+        // ════════════════════════════════════════════════
 
         /// <summary>
         /// 「💾 保存」ボタン → 入力値を検証して DB に保存
-        /// ▼ v0.1.6 ロック中の場合の処理：
-        ///   ・新規モードで既存ロック中 → 既存親レコードを取得して daily_report_id をセット
-        ///     → save_async は UPDATE モードで実行され、出退勤は1セットのみ維持される
-        ///   ・編集モードでロック中 → ロック解除されてないので出退勤は変わらない（DBの値そのまま）
+        ///
+        /// ▼ 修正：v0.1.8
+        /// ・grid_details.CommitEdit() を削除（DataGrid 廃止のため）
+        /// ・btn_cancel.IsEnabled → btn_back.IsEnabled / btn_exit.IsEnabled に変更
+        /// ・フォームに編集途中のデータがあれば確認を促す
         /// </summary>
         private async void btn_save_Click(object sender, RoutedEventArgs e)
         {
@@ -618,22 +1122,33 @@ namespace EA_DailyReport.Views.Dialogs
                 return;
             }
 
-            // 1行も作業詳細が無い場合は警告
+            // 一覧に作業詳細が無い場合は警告
             if (_details.Count == 0)
             {
-                MessageBox.Show("作業詳細を1行以上入力してください。",
-                    "入力エラー", MessageBoxButton.OK, MessageBoxImage.Warning);
+                // フォームに入力途中があれば、まずそれを追加するか案内
+                if (is_form_dirty())
+                {
+                    MessageBox.Show(
+                        "作業詳細が一覧に追加されておりません。\n" +
+                        "「＋ この作業を追加」ボタンを押してから保存してください。",
+                        "入力エラー",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+                else
+                {
+                    MessageBox.Show(
+                        "作業詳細を1件以上追加してください。",
+                        "入力エラー",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
                 return;
             }
 
-            // DataGrid のコミット（編集中セルが未確定なら確定させる）
-            grid_details.CommitEdit(DataGridEditingUnit.Cell, true);
-            grid_details.CommitEdit(DataGridEditingUnit.Row, true);
+            // ▼ 修正：v0.1.8 grid_details.CommitEdit() 削除（DataGrid 廃止のため）
 
             // ─── ▼ v0.1.6 既存親レコードの特定 ───
-            // 新規モードでも、同じ日 × 同じ人で既存日報があれば、
-            // その親 daily_reports.id を使って UPDATE モードで保存する
-            // → これで「2つの時間が存在する」事態を構造的に防止する
             int target_id = _editing_id;
             int existing_employee_id = _editing_report?.employee_id ?? 0;
             int existing_entered_by = _editing_report?.entered_by ?? 0;
@@ -642,7 +1157,6 @@ namespace EA_DailyReport.Views.Dialogs
 
             if (target_id == 0)
             {
-                // 新規モード → 既存親レコードを検索
                 try
                 {
                     using var conn = database_manager.create_connection();
@@ -658,7 +1172,6 @@ namespace EA_DailyReport.Views.Dialogs
 
                     if (existing != null)
                     {
-                        // 既存あり → UPDATE モードに切り替え
                         target_id = existing.id;
                         existing_employee_id = existing.employee_id;
                         existing_entered_by = existing.entered_by;
@@ -678,7 +1191,7 @@ namespace EA_DailyReport.Views.Dialogs
 
             var report = new DailyReport
             {
-                id = target_id,  // 0 なら新規・>0 なら更新
+                id = target_id,
                 report_date = dp_report_date.SelectedDate.Value.ToString("yyyy-MM-dd"),
                 employee_id = existing_employee_id,
                 employee_name = cmb_employee.Text.Trim(),
@@ -701,7 +1214,6 @@ namespace EA_DailyReport.Views.Dialogs
             foreach (var d in _details)
             {
                 d.sort_order = order++;
-                // 空白埋め
                 if (string.IsNullOrWhiteSpace(d.software)) d.software = "なし";
                 if (string.IsNullOrWhiteSpace(d.vehicle)) d.vehicle = "なし";
                 if (string.IsNullOrWhiteSpace(d.from_location)) d.from_location = "-";
@@ -714,14 +1226,16 @@ namespace EA_DailyReport.Views.Dialogs
             try
             {
                 btn_save.IsEnabled = false;
-                btn_cancel.IsEnabled = false;
+                // ▼ 修正：v0.1.8 btn_cancel → btn_back / btn_exit に変更
+                btn_back.IsEnabled = false;
+                btn_exit.IsEnabled = false;
 
                 int saved_id = await DailyReportService.save_async(report, detail_list);
 
                 MessageBox.Show(
                     target_id == 0
-                        ? $"日報を登録しました。（ID: {saved_id}）"
-                        : "日報を更新しました。",
+                        ? $"日報を登録いたしました。（ID: {saved_id}）"
+                        : "日報を更新いたしました。",
                     "保存完了",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
@@ -732,20 +1246,14 @@ namespace EA_DailyReport.Views.Dialogs
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    $"日報の保存に失敗しました。\n\n{ex.Message}",
+                    $"日報の保存に失敗いたしました。\n\n{ex.Message}",
                     "保存エラー",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
                 btn_save.IsEnabled = true;
-                btn_cancel.IsEnabled = true;
+                btn_back.IsEnabled = true;
+                btn_exit.IsEnabled = true;
             }
-        }
-
-        /// <summary>「キャンセル」ボタン</summary>
-        private void btn_cancel_Click(object sender, RoutedEventArgs e)
-        {
-            DialogResult = false;
-            Close();
         }
     }
 }
