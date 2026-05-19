@@ -52,6 +52,13 @@ namespace EA_DailyReport.Views.Dialogs
         // 0 以上 → 既存項目の編集モード（[更新][編集キャンセル] ボタン表示）
         private int _editing_work_index = -1;
 
+        // ▼ 追加 v0.1.9（冗長#2#3 修正）：cmb_employee_changed の二重発火抑制フラグ
+        //   xaml 側で SelectionChanged と LostFocus の両方に同じハンドラが登録されており、
+        //   さらに init_for_new_input → try_set_default_employee_name 経由でも発火する。
+        //   このフラグで check_existing_and_lock_async / load_job_type_for_employee_async の
+        //   多重実行（DB クエリ多重発火）を防ぐ。
+        private bool _is_checking_existing = false;
+
         // ▼ 追加：v0.1.8 定時時間の基準（Sprint 1 は固定 8.0h）
         // Sprint 2 で employee_work_settings 参照に切り替え予定
         private const double STANDARD_WORK_HOURS = 8.0;
@@ -513,8 +520,21 @@ namespace EA_DailyReport.Views.Dialogs
             if (_editing_id > 0) return;
             if (!IsLoaded) return;
 
-            await check_existing_and_lock_async();
-            await load_job_type_for_employee_async();
+            // ▼ 追加 v0.1.9（冗長#2#3 修正）：
+            //   SelectionChanged と LostFocus の二重発火、および try_set_default_employee_name
+            //   経由の発火による check_existing_and_lock_async 多重実行を抑制する。
+            if (_is_checking_existing) return;
+
+            try
+            {
+                _is_checking_existing = true;  // ▼ 追加 v0.1.9：実行中フラグを立てる
+                await check_existing_and_lock_async();
+                await load_job_type_for_employee_async();
+            }
+            finally
+            {
+                _is_checking_existing = false;  // ▼ 追加 v0.1.9：例外発生時も必ず解除
+            }
         }
 
         /// <summary>
@@ -605,6 +625,7 @@ namespace EA_DailyReport.Views.Dialogs
         /// <summary>
         /// 区分の AutoCompleteTextBox の LostFocus 時に呼ばれる
         /// projects.detail を引いて区分詳細を表示
+        /// ▼ 修正 v0.1.11：projects.name も取得して業務名（txt_project_name）に自動入力するように拡張。
         /// </summary>
         private async void txt_category_LostFocus(object sender, RoutedEventArgs e)
         {
@@ -612,13 +633,29 @@ namespace EA_DailyReport.Views.Dialogs
         }
 
         /// <summary>
-        /// 現在の区分から projects.detail を取得して txt_category_detail に表示
+        /// 現在の区分から projects.site_name / projects.company_name を取得して
+        /// 業務名（txt_project_name）と区分詳細（txt_category_detail）に自動表示
+        ///
+        /// ▼ 修正（実 DB スキーマ確認後）：
+        ///   projects テーブルの実カラム構成（2026/05/19 DB 直接確認）：
+        ///   id / category_code / site_name / company_name / detail / attribute /
+        ///   tab_color / is_active / sort_order / created_at / updated_at / updated_by
+        ///
+        ///   業務上のマッピング（yori 確定仕様）：
+        ///   ・「業務名(自動)」 = site_name（現場略称・例「鳥居水門_五洋建設」）
+        ///   ・「区分詳細(自動)」 = company_name（正式工事名・例「和歌山下津港海岸鳥居水門築造工事」）
+        ///   ・detail カラムは実データほぼ空のため使用しない
+        ///
+        ///   v0.1.11 では「name, detail」と書いていたが name カラムは存在せず SQLite エラー
+        ///   になっていた（catch で握りつぶしていたため業務名が常に空欄表示だった）。
         /// </summary>
         private async Task load_category_detail_async()
         {
             string code = txt_category.Text?.Trim() ?? "";
             if (string.IsNullOrWhiteSpace(code))
             {
+                // 区分が空の場合は業務名と区分詳細を両方クリア
+                txt_project_name.Text = "";
                 txt_category_detail.Text = "";
                 return;
             }
@@ -626,18 +663,36 @@ namespace EA_DailyReport.Views.Dialogs
             try
             {
                 using var conn = database_manager.create_connection();
-                var detail = await conn.QueryFirstOrDefaultAsync<string>(@"
-                    SELECT detail FROM projects
+                // ▼ 修正：実 DB カラムに合わせ SELECT site_name, company_name に変更
+                //   QueryFirstOrDefaultAsync (非ジェネリック版) は dynamic を返す。
+                //   dynamic.site_name / dynamic.company_name でカラム名アクセスできる（Dapper 標準仕様）。
+                var row = await conn.QueryFirstOrDefaultAsync(@"
+                    SELECT site_name, company_name FROM projects
                     WHERE category_code = @code AND is_active = 1
                     LIMIT 1",
                     new { code });
 
-                txt_category_detail.Text = detail ?? "";
+                if (row != null)
+                {
+                    // ▼ 修正：site_name → 業務名 / company_name → 区分詳細
+                    string? site_name = row.site_name as string;
+                    string? company_name = row.company_name as string;
+                    txt_project_name.Text = site_name ?? "";
+                    txt_category_detail.Text = company_name ?? "";
+                }
+                else
+                {
+                    // 該当する区分がマスタに無い場合は両方クリア
+                    txt_project_name.Text = "";
+                    txt_category_detail.Text = "";
+                }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine(
-                    $"[InputDialog] 区分詳細取得失敗（空欄で継続）: {ex.Message}");
+                    $"[InputDialog] 業務名・区分詳細取得失敗（空欄で継続）: {ex.Message}");
+                // 失敗時は両方クリア
+                txt_project_name.Text = "";
                 txt_category_detail.Text = "";
             }
         }
@@ -729,25 +784,152 @@ namespace EA_DailyReport.Views.Dialogs
         // ════════════════════════════════════════════════
 
         /// <summary>
+        /// <summary>
+        /// ▼ 追加：作業フォームの必須項目チェック + 区分妥当性チェック
+        /// btn_add_work_Click / btn_update_work_Click の両方から呼び出す。
+        /// 戻り値: true = 検証 OK / false = 検証 NG（MessageBox 表示済み・呼び出し元は return する）
+        ///
+        /// 必須項目仕様：
+        ///   ・区分 (空 NG + category_list に存在しないものは「不正な区分」エラー)
+        ///   ・内容 (空 NG)
+        ///   ・作業時間 (空 / 0 以下 / 数値変換不可 は NG)
+        ///   ・ソフト機材 (空 NG・「なし」は許容)
+        ///   ・車両 (空 NG・「なし」は許容)
+        ///   ・車両が「なし」以外の場合 → 移動方法・発・着・距離 も必須
+        ///     (移動方法は "-" 不可・発着は "-" 不可・距離は 0 不可)
+        /// </summary>
+        private bool validate_work_form()
+        {
+            // ----- 1. 区分の必須チェック -----
+            string category = txt_category.Text?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(category))
+            {
+                show_required_field_message();
+                txt_category.Focus();
+                return false;
+            }
+
+            // ----- 2. 区分が category_list に存在するかチェック（不正区分） -----
+            // 区分マスタに無い区分が手入力された場合に「不正な区分」アナウンス
+            if (category_list != null && !category_list.Contains(category))
+            {
+                MessageBox.Show(
+                    "この区分は不正です。\n正しい区分を選択するか、区分の追加をして下さい。",
+                    "不正な区分",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                txt_category.Focus();
+                return false;
+            }
+
+            // ----- 3. 内容の必須チェック -----
+            if (string.IsNullOrWhiteSpace(txt_detail.Text))
+            {
+                show_required_field_message();
+                txt_detail.Focus();
+                return false;
+            }
+
+            // ----- 4. 作業時間の必須チェック（空・数値変換不可・0 以下を NG） -----
+            if (string.IsNullOrWhiteSpace(txt_hours.Text)
+                || !double.TryParse(txt_hours.Text, out double hours)
+                || hours <= 0)
+            {
+                show_required_field_message();
+                txt_hours.Focus();
+                return false;
+            }
+
+            // ----- 5. ソフト機材の必須チェック（「なし」を選んでもらうことを期待） -----
+            if (string.IsNullOrWhiteSpace(txt_software.Text))
+            {
+                show_required_field_message();
+                txt_software.Focus();
+                return false;
+            }
+
+            // ----- 6. 車両の必須チェック（「なし」を選んでもらうことを期待） -----
+            string vehicle = txt_vehicle.Text?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(vehicle))
+            {
+                show_required_field_message();
+                txt_vehicle.Focus();
+                return false;
+            }
+
+            // ----- 7. 車両が「なし」以外の場合 → 移動方法・発・着・距離も必須 -----
+            // 車を使う作業 = 移動の詳細を必ず入力する必要がある仕様
+            if (vehicle != "なし")
+            {
+                string transport = txt_transport.Text?.Trim() ?? "";
+                string from_loc = txt_from_location.Text?.Trim() ?? "";
+                string to_loc = txt_to_location.Text?.Trim() ?? "";
+                string distance_str = txt_distance.Text?.Trim() ?? "";
+
+                // 7-1. 移動方法（"-" や空は NG・「下道」「高速」のいずれかが入っているべき）
+                if (string.IsNullOrWhiteSpace(transport) || transport == "-")
+                {
+                    show_required_field_message();
+                    txt_transport.Focus();
+                    return false;
+                }
+
+                // 7-2. 発（"-" や空は NG）
+                if (string.IsNullOrWhiteSpace(from_loc) || from_loc == "-")
+                {
+                    show_required_field_message();
+                    txt_from_location.Focus();
+                    return false;
+                }
+
+                // 7-3. 着（"-" や空は NG）
+                if (string.IsNullOrWhiteSpace(to_loc) || to_loc == "-")
+                {
+                    show_required_field_message();
+                    txt_to_location.Focus();
+                    return false;
+                }
+
+                // 7-4. 距離（空・0・数値変換不可は NG）
+                if (string.IsNullOrWhiteSpace(distance_str)
+                    || !double.TryParse(distance_str, out double dist)
+                    || dist <= 0)
+                {
+                    show_required_field_message();
+                    txt_distance.Focus();
+                    return false;
+                }
+            }
+
+            // すべての必須項目 OK
+            return true;
+        }
+
+        /// <summary>
+        /// ▼ 追加：必須項目未入力時の共通アナウンス
+        /// 同じメッセージを複数箇所で表示するため、メソッドに切り出して保守性を確保
+        /// </summary>
+        private void show_required_field_message()
+        {
+            MessageBox.Show(
+                "必須項目が入力されていません。ご確認ください。",
+                "入力不足",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+
+        /// <summary>
         /// 「＋ この作業を追加」ボタン
         /// フォーム入力値を _details に追加 → フォームクリア → カーソルを区分欄に戻す
+        /// ▼ 修正：validate_work_form() で必須項目チェック + 不正区分チェックを実施
         /// </summary>
         private void btn_add_work_Click(object sender, RoutedEventArgs e)
         {
+            // ▼ 修正：旧来の簡易チェック（区分または業務名のいずれかが空）を廃止し、
+            //   validate_work_form() で全必須項目と不正区分を検証する
+            if (!validate_work_form()) return;
+
             var work = extract_work_from_form();
-
-            // 入力検証：区分または業務名がいずれも空なら警告
-            if (string.IsNullOrWhiteSpace(work.category_code)
-             && string.IsNullOrWhiteSpace(work.project_name))
-            {
-                MessageBox.Show(
-                    "区分または業務名のいずれかを入力してください。",
-                    "入力不足",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-                return;
-            }
-
             work.sort_order = _details.Count;
             _details.Add(work);
 
@@ -760,6 +942,7 @@ namespace EA_DailyReport.Views.Dialogs
         /// <summary>
         /// 「✓ 更新」ボタン（編集モード時のみ表示）
         /// 編集中の _details インデックスをフォーム値で上書き
+        /// ▼ 修正：validate_work_form() で必須項目チェック + 不正区分チェックを実施
         /// </summary>
         private void btn_update_work_Click(object sender, RoutedEventArgs e)
         {
@@ -769,18 +952,10 @@ namespace EA_DailyReport.Views.Dialogs
                 return;
             }
 
-            var work = extract_work_from_form();
+            // ▼ 修正：追加時と同じ必須項目チェック + 不正区分チェック
+            if (!validate_work_form()) return;
 
-            if (string.IsNullOrWhiteSpace(work.category_code)
-             && string.IsNullOrWhiteSpace(work.project_name))
-            {
-                MessageBox.Show(
-                    "区分または業務名のいずれかを入力してください。",
-                    "入力不足",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-                return;
-            }
+            var work = extract_work_from_form();
 
             // 既存項目の id / sort_order などのキー情報は維持
             var original = _details[_editing_work_index];
@@ -906,8 +1081,8 @@ namespace EA_DailyReport.Views.Dialogs
             txt_detail.Text = "";
             txt_note.Text = "";
             txt_hours.Text = "";
-            txt_software.Text = "なし";
-            txt_vehicle.Text = "なし";
+            txt_software.Text = "";       // ▼ 修正：入力忘れ防止のため "なし" → "" (空白)。車両と同じ対応
+            txt_vehicle.Text = "";        // ▼ 修正 v0.1.10：入力忘れ防止のため "なし" → "" (空白)
             txt_transport.Text = "-";
             txt_from_location.Text = "-";
             txt_to_location.Text = "-";
@@ -971,14 +1146,34 @@ namespace EA_DailyReport.Views.Dialogs
         // ▼ 追加：v0.1.8 スタブボタン（Phase 2 / Sprint 2 で実装予定）
         // ════════════════════════════════════════════════
 
-        /// <summary>「区分リスト」ボタン（Phase 2 で実装）</summary>
-        private void btn_open_category_list_Click(object sender, RoutedEventArgs e)
+        /// <summary>
+        /// 「区分リスト」ボタン
+        /// ▼ 修正 v0.1.12 Phase 2：スタブを本実装に置き換え。
+        ///   CategoryListDialog をモーダル表示し、ユーザーが選択した区分コードを
+        ///   txt_category.Text にセット → load_category_detail_async() で
+        ///   業務名・区分詳細を自動取得する。
+        ///   キャンセル時は何もしない（フォームは現状維持）。
+        /// </summary>
+        private async void btn_open_category_list_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show(
-                "区分リスト機能は次の更新で実装予定でございます。",
-                "未実装",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            // CategoryListDialog をモーダル表示（Owner を this にして親子関係を明示）
+            var dlg = new CategoryListDialog { Owner = this };
+            bool? result = dlg.ShowDialog();
+
+            // ユーザーがダブルクリック選択した場合のみ、区分を反映
+            if (result == true
+                && !string.IsNullOrWhiteSpace(dlg.selected_category_code))
+            {
+                txt_category.Text = dlg.selected_category_code;
+
+                // ▼ 既存ロジック流用：projects.name / projects.detail を取得して
+                //   業務名（txt_project_name）と区分詳細（txt_category_detail）に自動入力
+                await load_category_detail_async();
+
+                // 次の入力をスムーズにするため、内容欄にフォーカス移動
+                txt_detail.Focus();
+            }
+            // キャンセル時はフォームに変更を加えない
         }
 
         /// <summary>「MAP」ボタン（Sprint 2 で実装）</summary>
