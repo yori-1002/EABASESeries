@@ -7,8 +7,8 @@
         mc:Ignorable="d"
         x:Name="this_dialog"
         Title="日報入力"
-        Height="900" Width="820"
-        MinHeight="780" MinWidth="790"
+        Height="900" Width="920"
+        MinHeight="780" MinWidth="890"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource brush_bg_main}">
     <!-- ▼ 修正：Window 高さ拡大（780 → 900、Min 680 → 780）と ScrollViewer 追加（後述）。
@@ -129,6 +129,10 @@
              Window が小さくなっても、縦方向のスクロールで全体にアクセス可能。
              横スクロールは UI 設計上不要なので Disabled（Window 縮小時は横幅が
              Min 制限で守られる前提）。 -->
+        <!-- ▼ 修正 v0.1.13d：v0.1.13c で HorizontalScrollBarVisibility を Auto に
+             変更したが、内部 Grid が「自分の希望幅」で広がり、保存ボタン等が
+             画面外に出る逆効果になったため Disabled に戻した。
+             MAP ボタンを見える位置に出す対応は別途レイアウト調整で行う。 -->
         <Grid Margin="15">
             <!-- ▼ 修正 v0.1.9：外側 Margin 縮小（20 → 15） -->
             <Grid.RowDefinitions>
@@ -561,10 +565,17 @@
                                   Width="160"
                                   IsEditable="True"
                                   TabIndex="16"
-                                  ItemsSource="{Binding ElementName=this_dialog, Path=vehicle_list}"/>
+                                  ItemsSource="{Binding ElementName=this_dialog, Path=vehicle_list}"
+                                  SelectionChanged="txt_vehicle_selection_changed"/>
                             <!-- ▼ 修正 v0.1.10：AutoCompleteTextBox → ComboBox(IsEditable=True) に変更。
                              ▼ボタンと枠線が WPF 標準で付くため「選ぶ」UX が明確になる。
                              ItemsSource バインドは vehicle_list(List<string>) でそのまま動作。 -->
+                            <!-- ▼ 修正 v0.1.12.1：MAP ボタン連動方式を見直し。
+                             ・v0.1.12 では TextBoxBase.TextChanged を XAML で配線したが、
+                               独自スタイルとの組合せで実機にて発火しないことが判明
+                             ・SelectionChanged は ComboBox 標準イベントで確実に発火する
+                             ・手入力（IsEditable=True）の TextChanged 反映はコードビハインドで
+                               AddHandler 配線へ移行（on_loaded 参照） -->
                         </StackPanel>
 
                         <!-- 移動方法 -->
@@ -599,27 +610,40 @@
                         </StackPanel>
 
                         <!-- 距離（km） -->
-                        <StackPanel Grid.Column="4" Margin="0,0,12,0">
+                        <StackPanel Grid.Column="4" Margin="0,0,12,0" VerticalAlignment="Bottom">
                             <TextBlock Text="距離（km）" Style="{StaticResource style_field_label}"/>
                             <TextBox x:Name="txt_distance"
-                                 Width="80" Padding="6,4"
+                                 Width="90" Padding="6,4"
                                  TabIndex="20"/>
+                            <!-- ▼ 修正 v0.1.13：Width 80 → 90 に拡大（距離入力フォームが狭く見切れる対策） -->
+                            <!-- ▼ 修正 v0.1.13a：VerticalAlignment="Bottom" 追加
+                             ・隣の MAP StackPanel が Bottom 揃えのため、距離だけ Top 揃えだと
+                               TextBox の下に余白ができて「下半分切れて見える」状態になる
+                             ・距離も MAP と揃えて Bottom にすることでラインを揃える -->
                         </StackPanel>
 
-                        <!-- MAP ボタン（Sprint 2 で実装・現状は無効化） -->
+                        <!-- MAP ボタン（v0.1.12 で本実装・車両=なし/空白のとき自動的に無効化） -->
                         <StackPanel Grid.Column="5" VerticalAlignment="Bottom">
                             <TextBlock Text=" " Style="{StaticResource style_field_label}"/>
                             <Button x:Name="btn_map"
                                 Content="🗺 MAP"
-                                Padding="10,5"
+                                Width="80"
+                                Padding="12,8"
                                 Background="{StaticResource brush_text_secondary}"
                                 Foreground="White"
                                 BorderThickness="0"
-                                FontSize="11"
+                                FontSize="13"
+                                FontWeight="SemiBold"
                                 IsEnabled="False"
                                 Cursor="Hand"
                                 Click="btn_map_Click"
-                                ToolTip="Google Maps 連携（Sprint 2 で有効化予定）"/>
+                                ToolTip="発・着をもとに Google Maps で経路を表示します（移動方法=下道なら高速・有料道路を回避）"/>
+                            <!-- ▼ 修正 v0.1.12：MAP ボタンを本実装に切り替え。
+                             IsEnabled=False は初期表示用に残し、車両の TextChanged に応じて
+                             update_map_button_state で動的に切り替える。 -->
+                            <!-- ▼ 修正 v0.1.13：MAP ボタン視認性向上
+                             ・Width="80" を明示（旧 Auto では約 55px しかなく小さすぎた）
+                             ・Padding "10,5" → "12,8"、FontSize 11 → 13、FontWeight=SemiBold 追加 -->
                         </StackPanel>
                     </Grid>
 

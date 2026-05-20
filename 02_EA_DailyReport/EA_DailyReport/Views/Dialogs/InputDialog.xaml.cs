@@ -180,6 +180,21 @@ namespace EA_DailyReport.Views.Dialogs
             update_totals_display();
             update_hours_remaining();
             update_list_section_label();
+
+            // ▼ 追加 v0.1.12.1：txt_vehicle の TextChanged をコードビハインドで配線
+            // ・理由：v0.1.12 では xaml の TextBoxBase.TextChanged 添付イベントで配線したが、
+            //         独自スタイル/テンプレートとの組合せで実機にて発火しないことが判明
+            // ・対策：xaml の SelectionChanged（項目選択時用）+ コードビハインドの
+            //         AddHandler（手入力時用）の併用で確実に動作させる
+            // ・AddHandler は InitializeComponent 完了後に呼ぶ必要があるため on_loaded で実施
+            txt_vehicle.AddHandler(
+                System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent,
+                new TextChangedEventHandler(txt_vehicle_text_changed));
+
+            // ▼ 追加 v0.1.12.1：初期状態の MAP ボタン状態を反映
+            // ・load_existing_async または init_for_new_input によって txt_vehicle.Text が
+            //   この時点で確定しているため、ここで明示的に update_map_button_state を呼ぶ
+            update_map_button_state();
         }
 
         // ────────────────────────────────────────────────
@@ -1176,14 +1191,178 @@ namespace EA_DailyReport.Views.Dialogs
             // キャンセル時はフォームに変更を加えない
         }
 
-        /// <summary>「MAP」ボタン（Sprint 2 で実装）</summary>
-        private void btn_map_Click(object sender, RoutedEventArgs e)
+        // ════════════════════════════════════════════════
+        // ▼ 修正 v0.1.12：MAP ボタン本実装（Google Maps URL パラメータ方式）
+        // ════════════════════════════════════════════════
+
+        /// <summary>
+        /// 「MAP」ボタンクリック：Google Maps の経路検索を既定ブラウザで開く（v0.1.12 で本実装）
+        ///
+        /// ▼ 仕様：
+        /// ・発・着・移動方法を URL パラメータとして組み立て、Google Maps を起動する
+        /// ・&travelmode=driving 固定（本ボタンは車両=「なし」以外のときのみ有効化されるため）
+        /// ・移動方法=「下道」のとき → avoid=highways,tolls を追加（高速・有料道路を回避）
+        /// ・発・着が空白 or "-"（未入力の意）のとき → MessageBox で入力を促す
+        ///
+        /// ▼ URL エンコードの根拠：
+        /// ・発・着には「&」「=」「#」「日本語」「半角スペース」等が混入し得るため
+        ///   Uri.EscapeDataString で必ずエスケープして URL を壊さないようにする
+        ///
+        /// ▼ 既定ブラウザ起動の根拠：
+        /// ・.NET 5 以降は Process.Start で URL を直接渡せないため
+        ///   ProcessStartInfo に UseShellExecute=true を明示する必要がある（公式ガイダンス準拠）
+        ///
+        /// ▼ Sprint 2 で予定の距離記憶機能（distance_history テーブル）は本実装に含めない
+        /// </summary>
+        private async void btn_map_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show(
-                "Google Maps 連携機能は Sprint 2 で実装予定でございます。",
-                "未実装",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            // ----- 1. 発・着の取得（前後空白除去） -----
+            string from_loc = txt_from_location.Text?.Trim() ?? "";
+            string to_loc = txt_to_location.Text?.Trim() ?? "";
+
+            // ----- 2. 発・着の必須チェック（空 or "-" は未入力扱い） -----
+            bool from_empty = string.IsNullOrWhiteSpace(from_loc) || from_loc == "-";
+            bool to_empty = string.IsNullOrWhiteSpace(to_loc) || to_loc == "-";
+            if (from_empty || to_empty)
+            {
+                MessageBox.Show(
+                    "発・着の両方を入力してから MAP ボタンを押してください。",
+                    "MAP 連携",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
+            // ----- 3. URL の組み立て（特殊文字対策のため必ずエスケープ） -----
+            try
+            {
+                string origin = Uri.EscapeDataString(from_loc);
+                string destination = Uri.EscapeDataString(to_loc);
+                string url = $"https://www.google.com/maps/dir/?api=1"
+                           + $"&origin={origin}"
+                           + $"&destination={destination}"
+                           + $"&travelmode=driving";
+
+                // ----- 4. 移動方法=下道 のときは高速・有料道路を回避 -----
+                string transport = txt_transport.Text?.Trim() ?? "";
+                if (transport == "下道")
+                {
+                    url += "&avoid=highways,tolls";
+                }
+
+                // ----- 5. 既定ブラウザで起動（UseShellExecute=true が必須） -----
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+                {
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                // 既定ブラウザ未設定・URL 異常・その他例外時のフォールバック
+                System.Diagnostics.Debug.WriteLine(
+                    $"[InputDialog] MAP 起動失敗：{ex.Message}");
+                MessageBox.Show(
+                    $"MAP の起動に失敗しました。\n\n{ex.Message}",
+                    "MAP 連携エラー",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                // ▼ 修正 v0.1.13：ブラウザ起動失敗時は距離入力ダイアログも表示しない
+                //   （Google Maps が開いていないのに距離を入力させるのは UX 上不適切）
+                return;
+            }
+
+            // ════════════════════════════════════════════════
+            // ▼ 追加 v0.1.13：Google Maps の起動完了を待ってから距離ダイアログを表示
+            // ・ブラウザ起動完了タイミングはアプリ側から正確には検知不可（別プロセスのため）
+            // ・現実解として固定時間（1500ms）待機する
+            // ・体感的にはこの遅延で「Google Maps が先に表示 → 数秒後にダイアログ」の流れになる
+            // ・既存ブラウザ稼働中なら 1〜2 秒で十分、新規ブラウザ起動なら 3〜5 秒かかる場合もあるが、
+            //   yori からのフィードバックがあれば本数値（1500ms）を調整する
+            // ════════════════════════════════════════════════
+            await Task.Delay(1500);
+
+            // ════════════════════════════════════════════════
+            // ▼ 追加 v0.1.13：距離入力ダイアログ（案 Z 半自動）
+            // ・OK 時：整数 km に四捨五入して txt_distance を上書き（既存値があっても上書き）
+            // ・キャンセル時：txt_distance は変更しない（あとで手入力する想定）
+            // ・将来 Sprint 3 以降で Google Routes API を実装した場合、本ダイアログは
+            //   「API 取得結果の確認ダイアログ」として再利用可能（初期値に API 値を表示）
+            // ════════════════════════════════════════════════
+            try
+            {
+                // 既存の txt_distance 値を初期表示（変更しない場合はそのまま OK で確定できる）
+                var dlg = new DistanceInputDialog(txt_distance.Text) { Owner = this };
+                if (dlg.ShowDialog() == true && dlg.entered_distance.HasValue)
+                {
+                    // 整数 km → 文字列で txt_distance に転記（yori 指示：常に上書き）
+                    txt_distance.Text = dlg.entered_distance.Value.ToString();
+                }
+                // キャンセル時は何もしない（txt_distance は既存のまま）
+            }
+            catch (Exception ex)
+            {
+                // ダイアログ表示自体の失敗（通常は発生しないが、Owner=null 等の構成ミスで起こり得る）
+                System.Diagnostics.Debug.WriteLine(
+                    $"[InputDialog] 距離入力ダイアログエラー：{ex.Message}");
+                MessageBox.Show(
+                    $"距離入力ダイアログの表示に失敗しました。\n\n{ex.Message}\n\n" +
+                    $"距離は手動で入力してください。",
+                    "距離入力エラー",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// 車両（txt_vehicle）の SelectionChanged：MAP ボタンの有効/無効を即時更新（v0.1.12.1 新規）
+        ///
+        /// ▼ 経緯：
+        /// ・v0.1.12 では xaml の TextBoxBase.TextChanged="..." 添付イベントで配線したが、
+        ///   独自スタイル/テンプレートとの組合せで実機にて発火しないことが判明
+        /// ・ComboBox 標準の SelectionChanged は XAML 配線で確実に発火するため、
+        ///   項目選択時の反映はこちらに切り替えた
+        ///
+        /// ▼ 手入力（IsEditable=True での直接入力）の反映について：
+        /// ・SelectionChanged だけでは手入力に反応しないため、
+        ///   コードビハインドで TextBoxBase.TextChangedEvent を AddHandler で配線
+        ///   （on_loaded メソッド末尾参照） → txt_vehicle_text_changed が呼ばれる
+        /// </summary>
+        private void txt_vehicle_selection_changed(object sender, SelectionChangedEventArgs e)
+        {
+            update_map_button_state();
+        }
+
+        /// <summary>
+        /// 車両（txt_vehicle）の TextChanged：MAP ボタンの有効/無効を即時更新
+        /// （v0.1.12 新規 → v0.1.12.1 で配線方式変更：AddHandler 経由で呼ばれる）
+        ///
+        /// ▼ 呼び出し経路（v0.1.12.1 以降）：
+        /// ・xaml の配線ではなく、on_loaded 内で AddHandler により配線される
+        /// ・手入力（IsEditable=True での直接タイピング）に反応する
+        /// </summary>
+        private void txt_vehicle_text_changed(object sender, TextChangedEventArgs e)
+        {
+            update_map_button_state();
+        }
+
+        /// <summary>
+        /// 車両の値に応じて MAP ボタンの IsEnabled を更新（v0.1.12 新規）
+        ///
+        /// ▼ 仕様：
+        /// ・車両が「なし」または空白のとき → MAP 無効
+        /// ・上記以外（実車両が選択されている） → MAP 有効
+        ///
+        /// ▼ 注意：
+        /// ・InitializeComponent 完了前に呼ばれると btn_map が null のため null ガードで保護
+        ///   （xaml の Name 解決はパース完了時に行われるため、Loaded より前のイベントで
+        ///   このメソッドが呼ばれる可能性がある）
+        /// </summary>
+        private void update_map_button_state()
+        {
+            if (btn_map == null) return;
+            string vehicle = txt_vehicle.Text?.Trim() ?? "";
+            bool is_no_vehicle = string.IsNullOrWhiteSpace(vehicle) || vehicle == "なし";
+            btn_map.IsEnabled = !is_no_vehicle;
         }
 
         // ════════════════════════════════════════════════
@@ -1445,6 +1624,7 @@ namespace EA_DailyReport.Views.Dialogs
                     "保存エラー",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
+                btn_save.IsEnabled = true;
                 btn_save.IsEnabled = true;
                 btn_back.IsEnabled = true;
                 btn_exit.IsEnabled = true;
