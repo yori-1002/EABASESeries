@@ -26,6 +26,26 @@ namespace EA_CostManager.ViewModels
         public string filter_match { get; }
         public string filter_names { get; }
         public bool is_single_mode { get; }
+
+        // ▼▼▼ 追加(B)：原価集計モード（"daily"/"task"）。タブごとに保持し、その場切替で更新する ▼▼▼
+        private string _agg_mode = "daily";
+        public string agg_mode
+        {
+            get => _agg_mode;
+            set
+            {
+                if (SetProperty(ref _agg_mode, value))
+                {
+                    OnPropertyChanged(nameof(is_task_mode));
+                    OnPropertyChanged(nameof(agg_mode_label));
+                }
+            }
+        }
+        /// <summary>task モードか（UIトグルのバインド用）</summary>
+        public bool is_task_mode => _agg_mode == "task";
+        /// <summary>UI表示用ラベル</summary>
+        public string agg_mode_label => _agg_mode == "task" ? "業務単位集計（担当者別）" : "日単位集計";
+
         public string filter_date_from { get; } = "";
         public string filter_date_to { get; } = "";
         public bool use_custom_rates { get; }
@@ -199,6 +219,8 @@ namespace EA_CostManager.ViewModels
             filter_date_from = model.filter_date_from;
             filter_date_to = model.filter_date_to;
             use_custom_rates = model.use_custom_rates == 1;
+            // ▼▼▼ 追加(B)：集計モードを受け取る（空なら daily） ▼▼▼
+            _agg_mode = string.IsNullOrWhiteSpace(model.agg_mode) ? "daily" : model.agg_mode;
         }
 
         // ---- データロード ----
@@ -218,6 +240,13 @@ namespace EA_CostManager.ViewModels
 
             try
             {
+                // ▼▼▼ 追加(B)：1業務ごと(1人ずつ)モード（最優先で分岐） ▼▼▼
+                if (agg_mode == "task")
+                {
+                    await load_task_mode_async(category_code, all_codes);
+                    return;
+                }
+
                 if (is_single_mode && !string.IsNullOrWhiteSpace(filter_names))
                 {
                     await load_single_mode_async(category_code, all_codes);
@@ -273,6 +302,208 @@ namespace EA_CostManager.ViewModels
                 is_loading = false;
                 await build_tooltip_async();
             }
+        }
+
+        // ---- 1業務ごと(1人ずつ)モード（B：daily_reports から非破壊で都度集計）----
+        // 粒度Y：日付 × 作業者 × 業務内容 で1行。1人が1日に3業務なら3行に割れる。
+        // 交通費・損料も daily_report 単位で紐づくため、その業務行に正しく配分される。
+        // ※ 損料は「同一機材を6時間以上使用」で計上。1人1業務単位だと6時間未満になり計上されない場合がある（仕様）。
+        private async Task load_task_mode_async(string category_code, string[] all_codes)
+        {
+            using var conn = database_manager.create_connection();
+
+            var settings = await conn.QueryAsync<app_setting>("SELECT * FROM app_settings");
+            var setting_dict = settings.ToDictionary(s => s.key, s => s.value);
+
+            decimal engineer_rate = get_rate(setting_dict, "engineer_daily_rate", 34800m);
+            decimal assistant_rate = get_rate(setting_dict, "assistant_daily_rate", 28000m);
+            double base_hours = (double)get_rate(setting_dict, "base_hours_per_day", 8m);
+            if (base_hours <= 0) base_hours = 8; // ゼロ除算ガード
+            decimal road_rate = get_rate(setting_dict, "road_cost_per_km", 50m);
+            decimal highway_rate = get_rate(setting_dict, "highway_cost_per_km", 100m);
+
+            // 機材日額マスタ（旧形式日報の daily_rate=0 を補完）
+            var equip_rate_map = (await conn.QueryAsync<(string name, decimal rate)>(
+                "SELECT equipment_name, daily_rate FROM equipment_rates WHERE is_active = 1"))
+                .ToDictionary(r => r.name, r => r.rate, StringComparer.OrdinalIgnoreCase);
+
+            // 登録車両（台数カウント対象）
+            var registered_vehicles = (await conn.QueryAsync<string>(
+                "SELECT vehicle_name FROM vehicles WHERE is_active = 1")).ToHashSet();
+
+            // 対象日報（id付き・有給/有休除外）
+            var reports = (await conn.QueryAsync<dynamic>(@"
+                SELECT dr.id, dr.report_date, dr.employee_name, dr.job_type,
+                       dr.category_code, dr.detail, dr.hours
+                FROM daily_reports dr
+                WHERE dr.category_code IN @codes
+                  AND dr.category_code NOT IN ('有給','有休')
+                ORDER BY dr.report_date",
+                new { codes = all_codes })).ToList();
+
+            // job_type が空/不明の場合に employees から補完するための辞書
+            var emp_job_map = (await conn.QueryAsync<(string name, string job)>(
+                "SELECT employee_name, job_type FROM employees WHERE job_type != '' AND job_type != '不明'"))
+                .ToDictionary(e => e.name, e => e.job);
+
+            var report_ids = reports.Select(r => (int)System.Convert.ToInt32(r.id)).ToList();   // ▼修正(B)：(int)で静的型化しCS8197回避
+
+            // 機材・交通を daily_report_id で引けるよう辞書化
+            var equip_map = new Dictionary<int, List<(string name, decimal rate, double hours)>>();
+            var trans_map = new Dictionary<int, List<(double dist, string vehicle, string method)>>();
+            if (report_ids.Count > 0)
+            {
+                var eq = (await conn.QueryAsync<dynamic>(@"
+                    SELECT de.daily_report_id, de.equipment_name, de.daily_rate, dr.hours
+                    FROM daily_equipment de
+                    JOIN daily_reports dr ON de.daily_report_id = dr.id
+                    WHERE de.daily_report_id IN @ids",
+                    new { ids = report_ids })).ToList();
+                foreach (var e in eq)
+                {
+                    int rid = System.Convert.ToInt32(e.daily_report_id);
+                    if (!equip_map.TryGetValue(rid, out var list)) { list = new(); equip_map[rid] = list; }
+                    list.Add(((string?)e.equipment_name ?? "",
+                              System.Convert.ToDecimal(e.daily_rate ?? 0),
+                              System.Convert.ToDouble(e.hours ?? 0)));
+                }
+
+                var tr = (await conn.QueryAsync<dynamic>(@"
+                    SELECT daily_report_id, distance, vehicle, travel_method
+                    FROM daily_transport
+                    WHERE daily_report_id IN @ids",
+                    new { ids = report_ids })).ToList();
+                foreach (var t in tr)
+                {
+                    int rid = System.Convert.ToInt32(t.daily_report_id);
+                    if (!trans_map.TryGetValue(rid, out var list)) { list = new(); trans_map[rid] = list; }
+                    list.Add((System.Convert.ToDouble(t.distance ?? 0),
+                              (string?)t.vehicle ?? "",
+                              (string?)t.travel_method ?? ""));
+                }
+            }
+
+            // 粒度Y：日付 × 作業者 × 業務内容 でグループ化
+            var grouped = reports
+                .GroupBy(r => (
+                    date: (string)r.report_date,
+                    emp: (string)(r.employee_name ?? ""),
+                    task: ((string?)r.detail ?? "").Replace("、", "・").Trim()))
+                .ToList();
+
+            var result = new List<cost_record>();
+
+            foreach (var g in grouped)
+            {
+                var date = DateTime.Parse(g.Key.date);
+
+                // 職種判定（空/不明は employees から補完）
+                string job = "";
+                foreach (var r in g)
+                {
+                    string jt = (string?)r.job_type ?? "";
+                    if (string.IsNullOrWhiteSpace(jt) || jt == "不明")
+                        emp_job_map.TryGetValue(g.Key.emp, out jt);
+                    if (!string.IsNullOrWhiteSpace(jt)) { job = jt; break; }
+                }
+                bool is_eng = job.Contains("技師");
+                bool is_ast = job.Contains("助手");
+
+                // ▼修正(B)：g(dynamic要素)への .Sum は動的ディスパッチで型を誤選択するため、ループで明示加算
+                double total_h = 0;
+                foreach (var rr in g) total_h += (double)System.Convert.ToDouble(rr.hours ?? 0);
+                decimal days = base_hours > 0 ? (decimal)(total_h / base_hours) : 0m;
+                days = Math.Round(days, 4);
+
+                decimal eng_cost = is_eng ? Math.Round(days * engineer_rate, 0) : 0m;
+                decimal ast_cost = is_ast ? Math.Round(days * assistant_rate, 0) : 0m;
+
+                var ids = g.Select(r => (int)System.Convert.ToInt32(r.id)).ToList();   // ▼修正(B)：(int)で静的型化しCS8197回避
+
+                // 機材（6時間以上で計上・このグループの日報分のみ）
+                decimal equ_c = 0m; int equ_qty = 0;
+                var equ_names_parts = new List<string>();
+                var equ_detail_parts = new List<string>();
+                var equ_by_name = ids
+                    .SelectMany(id => equip_map.TryGetValue(id, out var l)
+                        ? l : Enumerable.Empty<(string name, decimal rate, double hours)>())
+                    .Where(e => !string.IsNullOrWhiteSpace(e.name) && e.name != "なし")
+                    .GroupBy(e => e.name);
+                foreach (var eg in equ_by_name)
+                {
+                    double h = eg.Sum(x => x.hours);
+                    if (h < 6.0) continue;
+                    decimal rate = eg.First().rate;
+                    if (rate == 0 && equip_rate_map.TryGetValue(eg.Key, out decimal mr)) rate = mr;
+                    equ_c += rate;
+                    equ_qty++;
+                    equ_names_parts.Add(eg.Key);
+                    equ_detail_parts.Add($"{eg.Key}（{g.Key.emp} {h:0.0}h）");
+                }
+
+                // 交通（往復×単価／高速でも往復250km超は下道単価／「なし」除外）
+                decimal tra_c = 0m; double dist_total = 0;
+                var veh_set = new HashSet<string>();
+                foreach (var id in ids)
+                {
+                    if (!trans_map.TryGetValue(id, out var tlist)) continue;
+                    foreach (var t in tlist)
+                    {
+                        if (string.IsNullOrWhiteSpace(t.vehicle) || t.vehicle == "なし") continue;
+                        double round = t.dist * 2;
+                        decimal unit = (t.method == "高速" && round <= 250) ? highway_rate : road_rate;
+                        tra_c += (decimal)round * unit;
+                        dist_total += round;
+                        if (registered_vehicles.Contains(t.vehicle)) veh_set.Add(t.vehicle);
+                    }
+                }
+                tra_c = Math.Round(tra_c, 0);
+                int veh_count = Math.Min(veh_set.Count, 2);
+
+                result.Add(new cost_record
+                {
+                    category_code = category_code,
+                    record_date = g.Key.date,
+                    fiscal_month = $"{date.Year}年{date.Month}月度",
+                    work_content = g.Key.task,
+                    engineer_names = is_eng ? g.Key.emp : "",
+                    engineer_hours = is_eng ? total_h : 0,
+                    engineer_days = is_eng ? (double)days : 0,
+                    engineer_cost = eng_cost,
+                    engineer_count = is_eng ? 1 : 0,
+                    assistant_names = is_ast ? g.Key.emp : "",
+                    assistant_hours = is_ast ? total_h : 0,
+                    assistant_days = is_ast ? (double)days : 0,
+                    assistant_cost = ast_cost,
+                    assistant_count = is_ast ? 1 : 0,
+                    personnel_cost = eng_cost + ast_cost,
+                    transport_cost = tra_c,
+                    distance_total = Math.Round(dist_total, 1),
+                    vehicle_count = veh_count,
+                    equipment_names = string.Join("・", equ_names_parts),
+                    equipment_detail = string.Join("　", equ_detail_parts),
+                    equipment_cost = Math.Round(equ_c, 0),
+                    equipment_quantity = equ_qty,
+                    total_cost = Math.Round(eng_cost + ast_cost + tra_c + equ_c, 0),
+                });
+            }
+
+            // 既存の絞り込み（月度・期間・列フィルタ等）を適用
+            if (!string.IsNullOrWhiteSpace(filter_month))
+                result = result.Where(r => r.fiscal_month == filter_month).ToList();
+            if (!string.IsNullOrWhiteSpace(filter_date_from) && !string.IsNullOrWhiteSpace(filter_date_to))
+                result = result.Where(r =>
+                    string.Compare(r.record_date, filter_date_from) >= 0 &&
+                    string.Compare(r.record_date, filter_date_to) <= 0).ToList();
+
+            result = apply_filters(result);
+            result = result.OrderBy(r => r.record_date).ToList();
+
+            _raw_records = result;
+            is_empty_result = result.Count == 0;
+            cost_records = build_display_rows(result);
+
+            await restore_collapse_states_async();
         }
 
         // ---- 個人別集計モード（daily_reports から直接集計） ----
@@ -665,7 +896,8 @@ namespace EA_CostManager.ViewModels
                 (!string.IsNullOrWhiteSpace(filter_date_from) && !string.IsNullOrWhiteSpace(filter_date_to)) ||
                 !string.IsNullOrWhiteSpace(filter_content) ||
                 !string.IsNullOrWhiteSpace(filter_names) ||
-                is_single_mode;
+                is_single_mode ||
+                agg_mode == "task";   // ▼追加(B)
 
             if (has_filter || !use_custom_rates)
             {
@@ -681,6 +913,7 @@ namespace EA_CostManager.ViewModels
                 }
                 if (!string.IsNullOrWhiteSpace(filter_names)) sb.AppendLine($"氏名：{filter_names}");
                 if (is_single_mode) sb.AppendLine("個人別集計モード：ON");
+                if (agg_mode == "task") sb.AppendLine("集計：業務単位集計（担当者別）");   // ▼追加(B)
                 if (!has_filter) sb.AppendLine("（条件なし・全件）");
             }
 
@@ -1234,6 +1467,11 @@ namespace EA_CostManager.ViewModels
             // 注：折りたたみ状態の復元（restore_collapse_states_async）は
             // 起動時の一括セットでは省略する。タブを実際に開いたときに
             // load_records_async が呼ばれた際に復元される。
+
+            // ▼修正：起動・再オープン時もⓘ（絞り込み条件）の内容を生成する。
+            //   これが無いと info_tooltip が空のまま → Styleの「空なら非表示」トリガでⓘが消えていた。
+            //   build_tooltip_async は UI スレッド起点のため fire-and-forget で安全（完了時に info_tooltip を更新）。
+            _ = build_tooltip_async();
         }
 
         private static decimal get_rate(Dictionary<string, string> dict, string key, decimal fallback)

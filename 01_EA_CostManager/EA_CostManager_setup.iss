@@ -20,7 +20,7 @@
 
 ; ▼ 修正：表示名は CostManager（要件：ソフト名称はCostManager）
 #define MyAppName      "CostManager"
-#define MyAppVersion   "1.0.3"
+#define MyAppVersion   "1.1.0"
 #define MyAppPublisher "EABASE Series"
 
 ; ▼ 修正：exe名は CostManager.exe（csproj の AssemblyName と一致）

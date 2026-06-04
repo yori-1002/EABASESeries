@@ -1,12 +1,13 @@
+using CommunityToolkit.Mvvm.Input;
+using Dapper;
+using EA_CostManager.Data;
+using EA_CostManager.Models;
+using EA_CostManager.Services;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using CommunityToolkit.Mvvm.Input;
-using Dapper;
-using EA_CostManager.Data;
-using EA_CostManager.Models;
 
 namespace EA_CostManager.ViewModels
 {
@@ -139,7 +140,8 @@ namespace EA_CostManager.ViewModels
             string site,
             string company,
             string color,
-            string det = "")
+            string det = "",
+            string agg_mode = "daily")   // ▼追加(B)：現場(全件タブ)の既定集計モード
         {
             project_id = id;
             category_code = cat;
@@ -168,7 +170,8 @@ namespace EA_CostManager.ViewModels
                 filter_month = "",
                 filter_content = "",
                 filter_match = "partial",
-                filter_names = ""
+                filter_names = "",
+                agg_mode = agg_mode   // ▼追加(B)：現場の既定モードを全件タブに反映
             });
             display_tabs.Add(_all_records_tab);
 
@@ -224,8 +227,13 @@ namespace EA_CostManager.ViewModels
             foreach (var t in tabs)
             {
                 var vm = new filter_tab_view_model(t);
-                // ▼▼▼ 修正：一括取得済みrecordsを渡してDB呼び出しなしでセット ▼▼▼
-                vm.set_records_from_map(category_code, child_codes.ToList(), tab_records_map);
+                // ▼修正(B)：業務単位/1人ずつ/現場別単価タブは cost_records(日単位)では表せないため、
+                //   daily_reports から都度集計する load_records_async を使う。
+                //   通常モードのみ一括取得データ(set_records_from_map)を使用する。
+                if (vm.is_task_mode || vm.is_single_mode || vm.use_custom_rates)
+                    await vm.load_records_async(category_code, child_codes.ToList());
+                else
+                    vm.set_records_from_map(category_code, child_codes.ToList(), tab_records_map);
                 filter_tabs.Add(vm);
                 display_tabs.Add(vm);
             }
@@ -243,6 +251,130 @@ namespace EA_CostManager.ViewModels
             else
             {
                 selected_display_tab = _all_records_tab;
+            }
+        }
+
+
+        // ▼▼▼ 追加(B)：選んだモードを表示中タブに適用（その場切替・非破壊） ▼▼▼
+        public async Task apply_mode_to_current_async(filter_tab_view_model? tab, string mode)
+        {
+            if (tab == null) return;
+            mode = (mode == "task") ? "task" : "daily";
+            if (tab.agg_mode == mode) return;   // 同一モードなら無駄な再集計をしない
+
+            using (var conn = database_manager.create_connection())
+            {
+                if (tab.filter_tab_id == 0)
+                {
+                    // 全件タブ → 現場の既定モードとして保存
+                    await conn.ExecuteAsync(
+                        "UPDATE projects SET agg_mode = @m WHERE id = @pid",
+                        new { m = mode, pid = project_id });
+                }
+                else
+                {
+                    try { await conn.ExecuteAsync("ALTER TABLE cost_filter_tabs ADD COLUMN agg_mode TEXT DEFAULT 'daily'"); }
+                    catch { /* 既に存在する場合は無視 */ }
+                    await conn.ExecuteAsync(
+                        "UPDATE cost_filter_tabs SET agg_mode = @m WHERE id = @id",
+                        new { m = mode, id = tab.filter_tab_id });
+                }
+            }
+
+            tab.agg_mode = mode;
+
+            // 再読込：task は daily_reports から都度集計、daily は cost_records 参照
+            var child_codes = await EA_CostManager.Services.CategoryGroupService
+                .get_child_codes_async(category_code);
+            await tab.load_records_async(category_code, child_codes);
+        }
+
+        // ▼▼▼ 追加(B)：選んだモードで現在タブを複製し、新しい絞り込みタブを作る ▼▼▼
+        public async Task duplicate_with_mode_async(filter_tab_view_model? tab, string mode)
+        {
+            if (tab == null) return;
+            mode = (mode == "task") ? "task" : "daily";
+            string suffix = mode == "task" ? "（業務単位）" : "（日単位）";
+
+            var model = new Models.cost_filter_tab
+            {
+                project_id = project_id,
+                tab_name = (string.IsNullOrWhiteSpace(tab.tab_name) ? "全件" : tab.tab_name) + suffix,
+                filter_month = tab.filter_month,
+                filter_content = tab.filter_content,
+                filter_match = tab.filter_match,
+                filter_names = tab.filter_names,
+                is_single_mode = tab.is_single_mode ? 1 : 0,
+                filter_date_from = tab.filter_date_from,
+                filter_date_to = tab.filter_date_to,
+                use_custom_rates = tab.use_custom_rates ? 1 : 0,
+                agg_mode = mode,
+            };
+
+            using (var conn = database_manager.create_connection())
+            {
+                try { await conn.ExecuteAsync("ALTER TABLE cost_filter_tabs ADD COLUMN agg_mode TEXT DEFAULT 'daily'"); }
+                catch { /* 既に存在する場合は無視 */ }
+
+                var new_id = await conn.QuerySingleAsync<int>(@"
+                    INSERT INTO cost_filter_tabs
+                        (project_id, tab_name, filter_month, filter_content, filter_match,
+                         filter_names, is_single_mode, filter_date_from, filter_date_to,
+                         use_custom_rates, agg_mode)
+                    VALUES
+                        (@project_id, @tab_name, @filter_month, @filter_content, @filter_match,
+                         @filter_names, @is_single_mode, @filter_date_from, @filter_date_to,
+                         @use_custom_rates, @agg_mode);
+                    SELECT last_insert_rowid();", model);
+                model.id = new_id;
+            }
+
+            await add_filter_tab_async(model);
+
+            // ▼修正(あ)：複製は「複製元（大元/現在タブ）」を業務単位のまま残さない。
+            //   複製で業務単位ビューを別タブに切り出したら、元タブは日単位に戻す。
+            //   （apply_mode_to_current_async は同一モードなら何もしないので、元々dailyなら無害）
+            await apply_mode_to_current_async(tab, "daily");
+        }
+
+
+        // ▼▼▼ 追加(B)：この現場の cost_records を全期間で作り直し、表示中の全タブ（複製含む）を再読込 ▼▼▼
+        // ・取込で日報が増えても集計が古いままだと daily 表示がズレるため、ワンクリックで揃える。
+        // ・daily タブ → 作り直した cost_records から再読込 / task タブ → daily_reports から（常に最新）。
+        public async Task reaggregate_all_async()
+        {
+            if (is_reaggregating) return;   // 二重実行防止
+            is_reaggregating = true;
+            try
+            {
+                var child_codes = (await EA_CostManager.Services.CategoryGroupService
+                    .get_child_codes_async(category_code)).ToList();
+
+                // 1) cost_records を全期間で作り直す（親＋子コード）
+                var codes = new List<string> { category_code };
+                codes.AddRange(child_codes);
+                var svc = new CostAggregationService();
+                foreach (var c in codes.Distinct())
+                    await svc.aggregate_async(c, "2000-01-01", "2099-12-31");
+
+                // 2) 親の cost_records コレクションも作り直したデータで更新
+                using (var conn = database_manager.create_connection())
+                {
+                    var all_rows = (await conn.QueryAsync<cost_record>(
+                        "SELECT * FROM cost_records WHERE category_code IN @codes ORDER BY record_date",
+                        new { codes })).ToList();
+                    foreach (var r in all_rows)
+                        if (r.category_code != category_code) r.category_code = category_code;
+                    cost_records = new ObservableCollection<cost_record>(all_rows);
+                }
+
+                // 3) 表示中の全タブ（全件＋絞り込み＋複製）を再読込
+                foreach (var tab in display_tabs.ToList())
+                    await tab.load_records_async(category_code, child_codes);
+            }
+            finally
+            {
+                is_reaggregating = false;
             }
         }
 
@@ -264,6 +396,13 @@ namespace EA_CostManager.ViewModels
             await conn.ExecuteAsync(
                 "DELETE FROM cost_filter_tabs WHERE id = @id",
                 new { id = ft.filter_tab_id });
+
+            // ▼修正(B)：削除対象が選択中だと、TabControl が削除の最中に別タブへ
+            //   再選択しようとして IndexOutOfRangeException になる（WPFの定番の罠）。
+            //   先に全件タブ（必ず存在・index 0）へ選択を逃がしてから Remove する。
+            if (ReferenceEquals(selected_display_tab, ft))
+                selected_display_tab = _all_records_tab;
+
             filter_tabs.Remove(ft);
             display_tabs.Remove(ft);
         }
@@ -367,6 +506,11 @@ namespace EA_CostManager.ViewModels
             await conn.ExecuteAsync(
                 "UPDATE cost_filter_tabs SET is_archived = 1 WHERE id = @id",
                 new { id = ft.filter_tab_id });
+
+            // ▼修正(B)：削除（非表示化）対象が選択中だと TabControl が落ちるため、先に全件タブへ選択を逃がす
+            if (ReferenceEquals(selected_display_tab, ft))
+                selected_display_tab = _all_records_tab;
+
             filter_tabs.Remove(ft);
             display_tabs.Remove(ft);
         }
@@ -443,6 +587,15 @@ namespace EA_CostManager.ViewModels
         // ▼▼▼ 追加：現在選択中の絞り込みタブ追跡（Sprint 3.7） ▼▼▼
         // CostPage.xaml の filter TabControl.SelectedItem とTwoWayバインドして選択タブを追跡する
         private filter_tab_view_model? _selected_display_tab;
+
+        // ▼▼▼ 追加(B)：再集計中フラグ（ローディングバー表示用） ▼▼▼
+        private bool _is_reaggregating;
+        public bool is_reaggregating
+        {
+            get => _is_reaggregating;
+            set => SetProperty(ref _is_reaggregating, value);
+        }
+
         public filter_tab_view_model? selected_display_tab
         {
             get => _selected_display_tab;
@@ -454,6 +607,9 @@ namespace EA_CostManager.ViewModels
                     OnPropertyChanged(nameof(selected_tab_uses_custom_rates));
                     OnPropertyChanged(nameof(show_custom_rate_banner));
                     OnPropertyChanged(nameof(custom_rate_banner_text));
+                    // ▼削除(B)：タブ選択のたびにコンボを書き換える自動同期は、
+                    //   コンボ(TwoWay)↔タブ選択の連動でフリーズの原因になり、かつ要望には不要なので撤去。
+                    //   現在モードは枠色（is_task_mode）で表示。複製後の大元リセットは duplicate_with_mode_async 側で実施。
                 }
             }
         }
@@ -556,7 +712,7 @@ namespace EA_CostManager.ViewModels
                 // ▼▼▼ is_single_mode / use_custom_rates タブは daily_reports から直接集計が必要 ▼▼▼
                 // これらは records_map（cost_records）では対応できないため load_records_async にフォールバック
                 // 通常モードのみ set_records_from_map で一括取得データを使用する
-                if (vm.is_single_mode || vm.use_custom_rates)
+                if (vm.is_task_mode || vm.is_single_mode || vm.use_custom_rates)   // ▼修正(B)：task追加
                     await vm.load_records_async(parent_code, child_codes);
                 else
                     vm.set_records_from_map(parent_code, child_codes, records_map);

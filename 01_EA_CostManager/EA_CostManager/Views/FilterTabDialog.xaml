@@ -164,6 +164,20 @@
                     </StackPanel>
                 </Border>
 
+                <!-- ▼▼▼ 追加(B)：原価集計モード（1業務ごと＝1人ずつ） ▼▼▼ -->
+                <Border Background="#EAF7F1" CornerRadius="4" Padding="10,8"
+                        Margin="0,4,0,8" BorderBrush="#BFE3D2" BorderThickness="1">
+                    <StackPanel>
+                        <CheckBox x:Name="chk_task_mode"
+                                  Content="業務単位集計（担当者別）にする"
+                                  FontSize="12" FontWeight="SemiBold"
+                                  Foreground="#1F8A70"/>
+                        <TextBlock Margin="20,4,0,0" FontSize="10" Foreground="#666"
+                                   TextWrapping="Wrap"
+                                   Text="ONにすると、日付×作業者×業務内容で1行に割って表示します（1人が1日3業務なら3行）。daily_reportsから都度集計し、cost_recordsは変更しません。"/>
+                    </StackPanel>
+                </Border>
+
                 <TextBlock x:Name="txt_error" Foreground="Red" FontSize="11"
                            Visibility="Collapsed"/>
             </StackPanel>

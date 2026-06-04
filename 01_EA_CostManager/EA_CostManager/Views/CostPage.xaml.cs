@@ -391,7 +391,8 @@ namespace EA_CostManager.Views
         {
             var dlg = new FilterTabDialog(
                 project_vm.project_id,
-                project_vm.available_months)
+                project_vm.available_months,
+                project_vm.selected_display_tab?.agg_mode ?? "daily")   // ▼追加：現在タブのモードを初期値として引き継ぐ
             {
                 Owner = Window.GetWindow(this)
             };
@@ -1141,6 +1142,45 @@ namespace EA_CostManager.Views
 
                 MessageBox.Show(lines.ToString().TrimEnd(), "絞り込み条件", MessageBoxButton.OK, MessageBoxImage.Information);
             }
+        }
+
+        // ▼▼▼ (X/2段)：集計モード「変更 ▾」ボタン → メニューを開く際に対象VMを確保 ▼▼▼
+        //   2段メニューの末端MenuItemは ContextMenu を直接の親に持たないため、
+        //   ボタン押下時に現場VMを退避しておき、メニュー実行時はそれを使う（ツリー探索不要・確実）。
+        private project_cost_view_model? _mode_target_vm;
+        private void btn_apply_mode_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Button b && b.ContextMenu != null)
+            {
+                _mode_target_vm = b.DataContext as project_cost_view_model;
+                b.ContextMenu.PlacementTarget = b;
+                b.ContextMenu.IsOpen = true;
+            }
+        }
+
+        // ▼▼▼ (X)：集計モード変更メニュー（Tagで「このタブ/複製」×「日単位/業務単位」を判別） ▼▼▼
+        //   コンボ(pending_agg_mode)は廃止。メニューで選んだモードをそのまま実行する。
+        private async void mi_mode_action_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not System.Windows.Controls.MenuItem mi) return;
+            if (_mode_target_vm is not project_cost_view_model vm) return;   // ボタン押下時に確保した現場VM
+
+            string tag = mi.Tag?.ToString() ?? "";          // this_daily / dup_daily / this_task / dup_task
+            bool is_dup = tag.StartsWith("dup");
+            string mode = tag.EndsWith("task") ? "task" : "daily";
+
+            if (is_dup)
+                await vm.duplicate_with_mode_async(vm.selected_display_tab, mode);
+            else
+                await vm.apply_mode_to_current_async(vm.selected_display_tab, mode);
+        }
+
+        // ▼▼▼ 追加(B)：再集計ボタン（この現場の全タブを集計し直す） ▼▼▼
+        private async void btn_reaggregate_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not System.Windows.Controls.Button btn) return;
+            if (btn.Tag is not project_cost_view_model project_vm) return;
+            await project_vm.reaggregate_all_async();
         }
 
         // ▼▼▼ 追加：Excel書き出しボタンのハンドラー ▼▼▼

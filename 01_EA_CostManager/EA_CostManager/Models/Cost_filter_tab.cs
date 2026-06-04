@@ -50,5 +50,12 @@
         /// ONの場合、集計時に project_rates テーブルの単価を参照する
         /// </summary>
         public int use_custom_rates { get; set; } = 0;
+
+        // ▼▼▼ 追加(B)：原価集計モード ▼▼▼
+        /// <summary>
+        /// 原価集計モード。"daily"=従来の日ごと集計（cost_records参照）／
+        /// "task"=1業務ごと(1人ずつ)。日付×作業者×業務内容で1行に割り、daily_reportsから非破壊で都度集計する。
+        /// </summary>
+        public string agg_mode { get; set; } = "daily";
     }
 }

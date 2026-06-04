@@ -414,6 +414,13 @@
                                         <TextBlock Text="読み込み中..." FontSize="12" Foreground="#999"
                                                    Margin="16,0,0,0"
                                                    Visibility="{Binding is_loading, Converter={StaticResource BoolToVis}}"/>
+                                        <!-- ▼▼▼ 追加(B)：再集計中のローディングバー ▼▼▼ -->
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0"
+                                                    Visibility="{Binding is_reaggregating, Converter={StaticResource BoolToVis}}">
+                                            <ProgressBar IsIndeterminate="True" Width="140" Height="8" VerticalAlignment="Center"/>
+                                            <TextBlock Text="再集計中..." FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="#185FA5" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                        </StackPanel>
                                         <!-- ▼▼▼ 追加：単価変更適用中アナウンス ▼▼▼ -->
                                         <TextBlock Text="{Binding custom_rate_banner_text}"
                                                    FontSize="11" FontWeight="Bold"
@@ -503,6 +510,58 @@
                                             Margin="0,0,8,0"
                                             Cursor="Hand"
                                             ToolTip="他ユーザーの変更をこの現場に反映する (Ctrl+R)"/>
+                                    <!-- ▼▼▼ 追加(B)：再集計ボタン（保存中データで全タブを集計し直す） ▼▼▼ -->
+                                    <Button DockPanel.Dock="Right"
+                                            Content="🔄 再集計"
+                                            Tag="{Binding}"
+                                            Click="btn_reaggregate_Click"
+                                            FontSize="11" Padding="8,4" Margin="0,0,6,0"
+                                            HorizontalAlignment="Right" Cursor="Hand" BorderThickness="0"
+                                            Background="#7E57C2" Foreground="White"
+                                            ToolTip="保存中のデータで、この現場の全タブ（複製含む）を集計し直します"/>
+                                    <!-- ▼▼▼ (X)：集計モード＝現在表示(OneWay)＋変更▾メニュー（モード名表示は1箇所＝食い違い無し・連動無し） ▼▼▼ -->
+                                    <Border DockPanel.Dock="Right" Margin="0,0,6,0" BorderThickness="1"
+                                            CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="#EAF3FB"/>
+                                                <Setter Property="BorderBrush" Value="#9CC3E6"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding selected_display_tab.is_task_mode}" Value="True">
+                                                        <Setter Property="Background" Value="#E3F4EC"/>
+                                                        <Setter Property="BorderBrush" Value="#9AD3BC"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="集計" FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="#185FA5" VerticalAlignment="Center" Margin="2,0,8,0"/>
+                                            <!-- 現在モード（これが唯一のモード表示。OneWay・書き戻し無し） -->
+                                            <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="#333" Margin="0,0,10,0">
+                                                <Run Text="現在 "/><Run Text="{Binding selected_display_tab.agg_mode_label, Mode=OneWay, FallbackValue=日単位集計}" FontWeight="SemiBold"/>
+                                            </TextBlock>
+                                            <!-- 変更メニュー（選択＋実行を統合。コンボは廃止） -->
+                                            <Button Content="変更 ▾" Click="btn_apply_mode_Click" Tag="{Binding}"
+                                                    FontSize="11" Padding="10,2" Cursor="Hand" BorderThickness="0"
+                                                    Background="#185FA5" Foreground="White"
+                                                    ToolTip="このタブのモードを変更 / 別モードで複製">
+                                                <Button.ContextMenu>
+                                                    <ContextMenu>
+                                                        <!-- ▼ 2段：①モードを選ぶ → ②このタブ/複製タブ -->
+                                                        <MenuItem Header="日単位集計">
+                                                            <MenuItem Header="このタブに適用" Tag="this_daily" Click="mi_mode_action_Click"/>
+                                                            <MenuItem Header="複製タブに適用" Tag="dup_daily"  Click="mi_mode_action_Click"/>
+                                                        </MenuItem>
+                                                        <MenuItem Header="業務単位集計（担当者別）">
+                                                            <MenuItem Header="このタブに適用" Tag="this_task" Click="mi_mode_action_Click"/>
+                                                            <MenuItem Header="複製タブに適用" Tag="dup_task"  Click="mi_mode_action_Click"/>
+                                                        </MenuItem>
+                                                    </ContextMenu>
+                                                </Button.ContextMenu>
+                                            </Button>
+                                        </StackPanel>
+                                    </Border>
                                     <!-- ▼▼▼ 追加：年度全折/全展トグルボタン（月度ボタンの左） ▼▼▼ -->
                                     <Button DockPanel.Dock="Right"
                                             Tag="{Binding}"

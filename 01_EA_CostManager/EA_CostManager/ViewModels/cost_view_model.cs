@@ -189,9 +189,14 @@ namespace EA_CostManager.ViewModels
 
                 using var conn = database_manager.create_connection();
 
+                // ▼▼▼ 追加(B)：projects.agg_mode 列の存在を保証する（マイグレーション未適用のDBでもSELECTで落ちないように）▼▼▼
+                // FilterTabDialog 等と同じ防御パターン。既に存在すれば SqliteException を握りつぶす（冪等）。
+                try { await conn.ExecuteAsync("ALTER TABLE projects ADD COLUMN agg_mode TEXT DEFAULT 'daily'"); }
+                catch { /* 既に存在する場合は無視 */ }
+
                 // ▼▼▼ 修正：一括取得① - アクティブ現場の基本情報 ▼▼▼
                 var projects = (await conn.QueryAsync(@"
-                    SELECT id, category_code, site_name, company_name, tab_color, detail, sort_order
+                    SELECT id, category_code, site_name, company_name, tab_color, detail, sort_order, agg_mode
                     FROM projects
                     WHERE is_active = 1
                     ORDER BY category_code")).ToList();
@@ -281,7 +286,8 @@ namespace EA_CostManager.ViewModels
                         (string)(p.site_name ?? ""),
                         (string)(p.company_name ?? ""),
                         (string)(p.tab_color ?? ""),
-                        (string)(p.detail ?? ""));
+                        (string)(p.detail ?? ""),
+                        (string)(p.agg_mode ?? "daily"));   // ▼追加(B)：現場の既定モード
                     vm.sort_order = (int)(p.sort_order ?? 0);
 
                     // ▼▼▼ 修正：一括取得したデータを各VMに配布（DB呼び出しなし） ▼▼▼

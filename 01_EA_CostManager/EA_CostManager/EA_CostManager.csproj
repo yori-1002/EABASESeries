@@ -18,9 +18,9 @@
 		         ・DBインデックス9個の自動マイグレーション（業務テーブル高速化） -->
 		<!-- AssemblyVersion / FileVersion は4桁形式（X.X.X.X） -->
 		<!-- Version は SemVer 形式（NuGet等で参照される表示用バージョン） -->
-		<AssemblyVersion>1.0.3.0</AssemblyVersion>
-		<FileVersion>1.0.3.0</FileVersion>
-		<Version>1.0.3</Version>
+		<AssemblyVersion>1.1.0.0</AssemblyVersion>
+		<FileVersion>1.1.0.0</FileVersion>
+		<Version>1.1.0</Version>
 
 		<!-- ▼ 修正：エクスプローラのカーソルツールチップ表示用 -->
 		<!-- Product = 「CostManager」 → ツールチップに「CostManager Ver1.0.1」と表示される -->

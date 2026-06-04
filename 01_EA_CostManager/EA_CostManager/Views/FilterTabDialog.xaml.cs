@@ -13,7 +13,8 @@ namespace EA_CostManager.Views
 
         public FilterTabDialog(
             int project_id,
-            System.Collections.Generic.List<string> available_months)
+            System.Collections.Generic.List<string> available_months,
+            string default_agg_mode = "daily")   // ▼追加：呼び出し元タブの集計モードを引き継ぐ初期値
         {
             InitializeComponent();
             _project_id = project_id;
@@ -23,6 +24,9 @@ namespace EA_CostManager.Views
             foreach (var m in available_months)
                 cmb_month.Items.Add(m);
             cmb_month.SelectedIndex = 0;
+
+            // ▼追加：業務単位タブから絞り込む場合は「業務単位」を初期チェック（ユーザーは外せる）
+            chk_task_mode.IsChecked = (default_agg_mode == "task");
         }
 
         // ▼▼▼ 追加：期間指定チェックボックスのON/OFF切替 ▼▼▼
@@ -215,6 +219,8 @@ namespace EA_CostManager.Views
                 filter_match = match,
                 filter_names = txt_names.Text.Trim(),
                 is_single_mode = (chk_single_mode.IsChecked == true) ? 1 : 0,
+                // ▼▼▼ 追加(B)：1業務ごと(1人ずつ)モード ▼▼▼
+                agg_mode = (chk_task_mode.IsChecked == true) ? "task" : "daily",
                 // ▼▼▼ 追加：日付範囲フィルター ▼▼▼
                 filter_date_from = date_from,
                 filter_date_to = date_to,
@@ -234,6 +240,7 @@ namespace EA_CostManager.Views
                     "ALTER TABLE cost_filter_tabs ADD COLUMN filter_date_from TEXT DEFAULT ''",
                     "ALTER TABLE cost_filter_tabs ADD COLUMN filter_date_to TEXT DEFAULT ''",
                     "ALTER TABLE cost_filter_tabs ADD COLUMN use_custom_rates INTEGER DEFAULT 0",
+                    "ALTER TABLE cost_filter_tabs ADD COLUMN agg_mode TEXT DEFAULT 'daily'",   // ▼追加(B)
                 };
                 foreach (var sql in ensure_cols)
                 {
@@ -244,10 +251,10 @@ namespace EA_CostManager.Views
                 var new_id = await conn.QuerySingleAsync<int>(@"
                     INSERT INTO cost_filter_tabs
                         (project_id, tab_name, filter_month, filter_content, filter_match,
-                         filter_names, is_single_mode, filter_date_from, filter_date_to)
+                         filter_names, is_single_mode, filter_date_from, filter_date_to, agg_mode)
                     VALUES
                         (@project_id, @tab_name, @filter_month, @filter_content, @filter_match,
-                         @filter_names, @is_single_mode, @filter_date_from, @filter_date_to);
+                         @filter_names, @is_single_mode, @filter_date_from, @filter_date_to, @agg_mode);
                     SELECT last_insert_rowid();", model);
 
                 model.id = new_id;

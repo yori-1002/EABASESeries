@@ -79,21 +79,23 @@ namespace EA_CostManager.Models
         // ---- 表示用文字列 ----
         public string display_engineer_count => is_normal && engineer_count > 0 ? engineer_count.ToString() : "";
         public string display_assistant_count => is_normal && assistant_count > 0 ? assistant_count.ToString() : "";
-        public string display_engineer_days => is_normal ? engineer_days.ToString("0.00") : "";
-        public string display_engineer_hours => is_normal ? engineer_hours.ToString("0.0") : "";
-        public string display_assistant_days => is_normal ? assistant_days.ToString("0.00") : "";
-        public string display_assistant_hours => is_normal ? assistant_hours.ToString("0.0") : "";
-        public string display_total_days_str => is_normal ? total_days.ToString("0.00") : "";
+        // ▼修正：日数・時間は通常行＋小計行で表示（小計は月度合計）
+        public string display_engineer_days => (is_normal || is_subtotal) ? engineer_days.ToString("0.00") : "";
+        public string display_engineer_hours => (is_normal || is_subtotal) ? engineer_hours.ToString("0.0") : "";
+        public string display_assistant_days => (is_normal || is_subtotal) ? assistant_days.ToString("0.00") : "";
+        public string display_assistant_hours => (is_normal || is_subtotal) ? assistant_hours.ToString("0.0") : "";
+        public string display_total_days_str => (is_normal || is_subtotal) ? total_days.ToString("0.00") : "";
         public string display_distance => is_normal ? distance_total.ToString("0.0") : "";
         public string display_vehicle_count => is_normal ? vehicle_count.ToString() : "";
         public string display_equipment_qty => is_normal ? equipment_quantity.ToString() : "";
         public string display_equipment_detail => is_normal ? equipment_detail : "";
-        public string display_engineer_cost => is_normal ? engineer_cost.ToString("#,##0") : "";
-        public string display_assistant_cost => is_normal ? assistant_cost.ToString("#,##0") : "";
-        public string display_personnel_cost => is_normal ? personnel_cost.ToString("#,##0") : "";
-        public string display_transport_cost => is_normal ? transport_cost.ToString("#,##0") : "";
-        public string display_equipment_cost => is_normal ? equipment_cost.ToString("#,##0") : "";
-        public string display_total_cost => is_normal ? total_cost.ToString("#,##0") : "";
+        // ▼修正：金額系は通常行＋小計行で表示（小計は各列の月度合計）
+        public string display_engineer_cost => (is_normal || is_subtotal) ? engineer_cost.ToString("#,##0") : "";
+        public string display_assistant_cost => (is_normal || is_subtotal) ? assistant_cost.ToString("#,##0") : "";
+        public string display_personnel_cost => (is_normal || is_subtotal) ? personnel_cost.ToString("#,##0") : "";
+        public string display_transport_cost => (is_normal || is_subtotal) ? transport_cost.ToString("#,##0") : "";
+        public string display_equipment_cost => (is_normal || is_subtotal) ? equipment_cost.ToString("#,##0") : "";
+        public string display_total_cost => (is_normal || is_subtotal) ? total_cost.ToString("#,##0") : "";
 
         // ================================================================
         // ファクトリメソッド
@@ -149,23 +151,36 @@ namespace EA_CostManager.Models
         {
             var list = records.ToList();
 
+            // ▼修正：各列の月度合計を計算（技師/助手の人件費・交通費も追加）
             double eng_days = list.Sum(r => r.engineer_days);
             double eng_h = list.Sum(r => r.engineer_hours);
+            decimal eng_c = list.Sum(r => r.engineer_cost);
             double asst_days = list.Sum(r => r.assistant_days);
             double asst_h = list.Sum(r => r.assistant_hours);
+            decimal asst_c = list.Sum(r => r.assistant_cost);
             decimal pers = list.Sum(r => r.personnel_cost);
+            decimal trans = list.Sum(r => r.transport_cost);
             decimal equ_c = list.Sum(r => r.equipment_cost);
             decimal total = list.Sum(r => r.total_cost);
 
-            string line1 = $"技師 {eng_days:0.00}日({eng_h:0.0}h) / 助手 {asst_days:0.00}日({asst_h:0.0}h)";
-            string line2 = $"人件費 {pers:#,##0}円 / 損料 {equ_c:#,##0}円 / 合計 {total:#,##0}円";
-
+            // ▼修正：作業内容のまとめテキストは廃止し、各数値を列ごとに保持（display_* が小計でも返す）
             return new()
             {
                 row_type = RowItemType.subtotal,
                 fiscal_month = fiscal_month,
-                display_date = $"【{fiscal_month}】",
-                work_content = line1 + "\n" + line2,
+                display_date = $"【{fiscal_month}】",   // 作業日列に月度ラベル
+                work_content = "月度総合計",             // 作業内容列に合計行ラベル（ぱっと見で合計と分かるように）
+                engineer_days = eng_days,
+                engineer_hours = eng_h,
+                engineer_cost = eng_c,
+                assistant_days = asst_days,
+                assistant_hours = asst_h,
+                assistant_cost = asst_c,
+                total_days = eng_days + asst_days,
+                personnel_cost = pers,
+                transport_cost = trans,
+                equipment_cost = equ_c,
+                total_cost = total,
             };
         }
 

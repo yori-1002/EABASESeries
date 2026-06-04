@@ -64,6 +64,10 @@ public static class V2Migration
         await TryAddColumnAsync(connection,
             "ALTER TABLE projects ADD COLUMN sort_order INTEGER DEFAULT 0");
 
+        // ▼▼▼ 追加(B)：現場（全件タブ）の既定集計モード（'daily'/'task'） ▼▼▼
+        await TryAddColumnAsync(connection,
+            "ALTER TABLE projects ADD COLUMN agg_mode TEXT DEFAULT 'daily'");
+
         // ─── 絞り込みタブ管理テーブル（Sprint 3追加） ───
         await connection.ExecuteAsync(@"
             CREATE TABLE IF NOT EXISTS cost_filter_tabs (
@@ -82,6 +86,10 @@ public static class V2Migration
             "ALTER TABLE cost_filter_tabs ADD COLUMN is_single_mode INTEGER DEFAULT 0");
         await TryAddColumnAsync(connection,
             "ALTER TABLE cost_filter_tabs ADD COLUMN is_archived INTEGER DEFAULT 0");
+
+        // ▼▼▼ 追加(B)：絞り込みタブごとの集計モード（'daily'/'task'） ▼▼▼
+        await TryAddColumnAsync(connection,
+            "ALTER TABLE cost_filter_tabs ADD COLUMN agg_mode TEXT DEFAULT 'daily'");
 
         // ▼▼▼ 追加：project_rates テーブル（現場別単価設定 Sprint 3.7） ▼▼▼
         await connection.ExecuteAsync(@"
