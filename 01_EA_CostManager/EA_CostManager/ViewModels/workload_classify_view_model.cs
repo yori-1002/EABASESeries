@@ -110,8 +110,16 @@ namespace EA_CostManager.ViewModels
         public string applied_text =>
             linked_categories.Count == 0 ? "未設定" : $"{linked_categories.Count} 区分";
 
-        /// <summary>適用先を変更したときに一覧の表示を更新させる</summary>
-        public void notify_links_changed() => notify(nameof(applied_text));
+        /// <summary>
+        /// 適用先を変更したときに一覧の表示を更新させる。
+        /// ▼ 修正 [Sprint 7D]：該当件数は適用先の区分に絞って数えるため、
+        /// チェックの ON/OFF でも数え直す必要がある（changed が再計算を呼ぶ）。
+        /// </summary>
+        public void notify_links_changed()
+        {
+            notify(nameof(applied_text));
+            changed?.Invoke();
+        }
 
         private string _name = "";
         public string name
@@ -227,6 +235,13 @@ namespace EA_CostManager.ViewModels
         /// </summary>
         private List<string> _normalized_tasks = new();
 
+        /// <summary>
+        /// ▼ 追加 [Sprint 7D]：業務行ごとの振り分け先区分（_normalized_tasks と同じ並び）。
+        /// null＝どの区分のキーワードにも当たらない（未分類）。
+        /// サブ分類の該当件数を「実際にそのタブに出る件数」として数えるために必要。
+        /// </summary>
+        private readonly List<edit_category?> _task_category = new();
+
         public string project_title { get; }
 
         public ObservableCollection<edit_category> categories { get; } = new();
@@ -321,20 +336,24 @@ namespace EA_CostManager.ViewModels
         /// <summary>新規区分（id=0）のモードを一時的に保持するためのキー採番用</summary>
         private int _temp_id_seq = -1;
 
+        /// <summary>▼ 追加 [Sprint 7D]：区分のサブ分類モード（行が無ければ common）</summary>
+        private string mode_of(edit_category cat) =>
+            _mode_by_category.TryGetValue(mode_key(cat), out var m)
+                ? m : workload_subgroup_mode.MODE_COMMON;
+
         private string current_mode
         {
-            get
-            {
-                if (_selected_category == null) return workload_subgroup_mode.MODE_COMMON;
-                int key = mode_key(_selected_category);
-                return _mode_by_category.TryGetValue(key, out var m)
-                    ? m : workload_subgroup_mode.MODE_COMMON;
-            }
+            get => _selected_category == null
+                ? workload_subgroup_mode.MODE_COMMON
+                : mode_of(_selected_category);
             set
             {
                 if (_selected_category == null) return;
                 _mode_by_category[mode_key(_selected_category)] = value;
                 OnPropertyChanged(nameof(is_mode_none));
+                // ▼ 追加 [Sprint 7D]：「分けない」にした区分の行はサブ分類に出ないため数え直す
+                //   （振り分け自体は変わらないので、区分の該当件数は据え置きでよい）
+                foreach (var s in subgroups) recalc_subgroup_hits(s);
             }
         }
 
@@ -451,7 +470,7 @@ namespace EA_CostManager.ViewModels
                         ec.keywords.Add(new edit_keyword { id = k.id, keyword = k.keyword });
                     }
 
-                    ec.name_changed = () => recalc_hits(ec);
+                    ec.name_changed = () => recalc_all_hits();   // ▼ 修正 [Sprint 7D]
                     categories.Add(ec);
                 }
 
@@ -508,8 +527,7 @@ namespace EA_CostManager.ViewModels
                     _mode_by_category[m.category_id] = m.mode;
 
                 // ---- 全区分・全サブ分類の該当件数を計算 ----
-                foreach (var c in categories) recalc_hits(c);
-                foreach (var s in subgroups) recalc_subgroup_hits(s); // ▼ 追加 [7C-fix4]
+                recalc_all_hits();   // ▼ 修正 [Sprint 7D]：振り分け→区分→サブ分類の順に計算
 
                 selected_category = categories.FirstOrDefault();
                 update_status();
@@ -583,12 +601,39 @@ namespace EA_CostManager.ViewModels
         }
 
         /// <summary>
-        /// ▼ 追加 [7C-fix4]：サブ分類の該当件数を再計算する。
+        /// ▼ 追加 [Sprint 7D]：業務行を区分へ振り分け直す。
+        /// 判定は集計本体と同じ WorkloadAggregationService.classify_index を使う
+        /// （画面の並び順＝保存時の sort_order で評価し、最初に当たった区分が取る）。
+        /// 同じ規則をここに書き写すと、プレビューの数字と実際の集計がずれるため。
+        /// </summary>
+        private void recalc_task_assignment()
+        {
+            // 区分の評価順に並べた正規化済みキーワード（業務行ごとに作り直さない）
+            var kw_in_order = categories
+                .Select(c => resolve_keywords(c)
+                                .Select(WorkloadAggregationService.normalize_public)
+                                .Where(w => w.Length > 0)
+                                .ToList())
+                .ToList();
+
+            _task_category.Clear();
+            foreach (var t in _normalized_tasks)
+            {
+                int idx = WorkloadAggregationService.classify_index(t, kw_in_order);
+                _task_category.Add(idx < 0 ? null : categories[idx]);
+            }
+        }
+
+        /// <summary>
+        /// ▼ 追加 [7C-fix4] ／ ▼ 修正 [Sprint 7D]：サブ分類の該当件数を再計算する。
         /// キーワード欄が空欄ならサブ分類名で判定する（resolve_keywords がその処理を行う）。
         /// 判定は集計本体と同じ正規化＋部分一致。
-        /// ※ ここでは区分による絞り込みは行わず、案件全体の業務行に対して数えている。
-        ///    実際の集計では「区分に振り分けられた行の中で」さらにサブ分類判定が走るため、
-        ///    実際の件数はこの数以下になる（キーワードが効いているかの目安として使う）。
+        ///
+        /// ▼ 修正 [Sprint 7D]：適用先にチェックした区分に振り分けられた業務行の中だけで数える。
+        ///   以前は案件全体の業務行に対して数えていたため、実際にタブに出る件数と大きくずれていた
+        ///   （共通／専用の二択だった頃の名残。適用先を区分ごとに選ぶ今は誤解を招くため）。
+        /// ※ 同じ業務行に複数のサブ分類が当たる場合、集計では並び順が先のサブ分類が取る。
+        ///   ここでは各サブ分類が単独で何件拾うかを数えるため、その分だけ多くなることがある。
         /// </summary>
         private void recalc_subgroup_hits(edit_subgroup sub)
         {
@@ -597,9 +642,35 @@ namespace EA_CostManager.ViewModels
                 .Where(w => w.Length > 0)
                 .ToList();
 
-            sub.hit_count = words.Count == 0
-                ? 0
-                : _normalized_tasks.Count(t => words.Any(w => t.Contains(w, StringComparison.Ordinal)));
+            // キーワードが無い、またはどの区分にも適用されていない＝どこにも出ない
+            if (words.Count == 0 || sub.linked_categories.Count == 0)
+            {
+                sub.hit_count = 0;
+                return;
+            }
+
+            int n = 0;
+            for (int i = 0; i < _normalized_tasks.Count && i < _task_category.Count; i++)
+            {
+                var cat = _task_category[i];
+                if (cat == null) continue;                          // 未分類の行はどのタブにも出ない
+                if (!sub.linked_categories.Contains(cat)) continue; // 適用先が外れている区分の行
+                if (mode_of(cat) == workload_subgroup_mode.MODE_NONE) continue;  // 分けない区分
+
+                if (words.Any(w => _normalized_tasks[i].Contains(w, StringComparison.Ordinal))) n++;
+            }
+            sub.hit_count = n;
+        }
+
+        /// <summary>
+        /// ▼ 追加 [Sprint 7D]：区分側の変更（名称・キーワード・並び順・追加削除）は
+        /// 業務行の振り分けを変えるため、サブ分類の該当件数まで数え直す必要がある。
+        /// </summary>
+        private void recalc_all_hits()
+        {
+            recalc_task_assignment();
+            foreach (var c in categories) recalc_hits(c);
+            foreach (var s in subgroups) recalc_subgroup_hits(s);
         }
 
         /// <summary>この区分が判定に使う全キーワード（区分名＋追加キーワード）</summary>
@@ -624,8 +695,11 @@ namespace EA_CostManager.ViewModels
         private void update_status()
         {
             int total = _normalized_tasks.Count;
+            // ▼ 修正 [Sprint 7D]：区分とサブ分類で該当件数の意味が異なるため、両方を説明する
             status_message = $"対象の業務行：{total} 件　／　区分：{categories.Count} 件"
-                           + "　※該当件数は現在のキーワードで何件に当たるかの目安です（保存すると集計に反映されます）。";
+                           + "　※区分の該当件数はそのキーワードに当たる行数の目安です（他区分との優先順位は未考慮）。"
+                           + "　サブ分類の該当件数は、適用先にチェックした区分に振り分けられた行の中での件数です。"
+                           + "（保存すると集計に反映されます）";
         }
 
         // ============================================================
@@ -634,10 +708,10 @@ namespace EA_CostManager.ViewModels
         private void add_category()
         {
             var ec = new edit_category { id = 0, name = "新しい区分" };
-            ec.name_changed = () => recalc_hits(ec);
+            ec.name_changed = () => recalc_all_hits();   // ▼ 修正 [Sprint 7D]
             categories.Add(ec);
             selected_category = ec;
-            recalc_hits(ec);
+            recalc_all_hits();   // ▼ 修正 [Sprint 7D]：区分が増えると振り分けが変わる
             rebuild_subgroup_targets();   // ▼ 追加 [Sprint 7D]：適用先チェック一覧に新区分を出す
             update_status();
         }
@@ -667,6 +741,8 @@ namespace EA_CostManager.ViewModels
 
             categories.Remove(_selected_category);
             selected_category = categories.FirstOrDefault();
+            // ▼ 追加 [Sprint 7D]：この区分に振り分けられていた行が他区分／未分類に移るため数え直す
+            recalc_all_hits();
             rebuild_subgroup_targets();   // ▼ 追加 [Sprint 7D]：チェック一覧から消した区分を除く
             update_status();
         }
@@ -680,6 +756,8 @@ namespace EA_CostManager.ViewModels
             if (i < 0 || j < 0 || j >= categories.Count) return;
             categories.Move(i, j);
             selected_category = categories[j];   // 選択を維持
+            // ▼ 追加 [Sprint 7D]：並び順＝判定の優先順のため、振り分け先が変わりうる
+            recalc_all_hits();
         }
 
         // ============================================================
@@ -708,7 +786,7 @@ namespace EA_CostManager.ViewModels
 
             _selected_category.keywords.Add(new edit_keyword { id = 0, keyword = w });
             new_keyword = "";
-            recalc_hits(_selected_category);
+            recalc_all_hits();   // ▼ 修正 [Sprint 7D]：キーワードが増えると振り分けが変わる
         }
 
         private void delete_keyword()
@@ -717,7 +795,7 @@ namespace EA_CostManager.ViewModels
             if (_selected_keyword.id != 0) _deleted_keyword_ids.Add(_selected_keyword.id);
             _selected_category.keywords.Remove(_selected_keyword);
             selected_keyword = null;
-            recalc_hits(_selected_category);
+            recalc_all_hits();   // ▼ 修正 [Sprint 7D]
         }
 
         // ============================================================
@@ -775,10 +853,10 @@ namespace EA_CostManager.ViewModels
                 foreach (var w in src.keywords)
                     ec.keywords.Add(new edit_keyword { id = 0, keyword = w });
 
-                ec.name_changed = () => recalc_hits(ec);
+                ec.name_changed = () => recalc_all_hits();   // ▼ 修正 [Sprint 7D]
                 categories.Add(ec);
-                recalc_hits(ec);
             }
+            recalc_all_hits();            // ▼ 修正 [Sprint 7D]：取り込んだ区分の分だけ振り分けが変わる
             rebuild_subgroup_targets();   // ▼ 追加 [Sprint 7D]：取り込んだ区分をチェック一覧にも出す
             update_status();
             status_message = $"{dlg.selected_categories.Count} 件の区分を取り込みました。「保存」で確定されます。";

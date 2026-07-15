@@ -16,11 +16,17 @@
 		         ・user_settings.json の保存先を %LOCALAPPDATA% に変更（保存エラー修正）
 		         ・ウィンドウ状態（最大化/通常サイズ・位置）の起動時復元・終了時保存
 		         ・DBインデックス9個の自動マイグレーション（業務テーブル高速化） -->
+		<!-- ▼ 修正：v1.2.2
+		     v1.1.0 → v1.2.1：工数表（業務区分・キーワード・サブ分類）機能を追加
+		     v1.2.1 → v1.2.2：サブ分類の適用先を区分タブごとに選べるように変更
+		                      ／原価集計の現場情報バーで詳細が長い場合の折り返し対応
+		     ※ この表記は画面左下に出る。上げ忘れると、起動しているのが
+		        修正前後どちらのビルドか判別できなくなるため、リリースごとに更新すること。 -->
 		<!-- AssemblyVersion / FileVersion は4桁形式（X.X.X.X） -->
 		<!-- Version は SemVer 形式（NuGet等で参照される表示用バージョン） -->
-		<AssemblyVersion>1.1.0.0</AssemblyVersion>
-		<FileVersion>1.1.0.0</FileVersion>
-		<Version>1.1.0</Version>
+		<AssemblyVersion>1.2.2.0</AssemblyVersion>
+		<FileVersion>1.2.2.0</FileVersion>
+		<Version>1.2.2</Version>
 
 		<!-- ▼ 修正：エクスプローラのカーソルツールチップ表示用 -->
 		<!-- Product = 「CostManager」 → ツールチップに「CostManager Ver1.0.1」と表示される -->

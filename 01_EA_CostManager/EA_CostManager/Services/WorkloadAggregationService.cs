@@ -139,6 +139,12 @@ namespace EA_CostManager.Services
                                  .Where(k => k.Length > 0)
                                  .ToList());
 
+            // ▼ 追加 [Sprint 7D]：区分の評価順に並べた正規化済みキーワード。
+            //   業務行ごとに作り直さないよう、ループの外で1度だけ用意する。
+            var kw_in_category_order = result.categories
+                .Select(c => kw_by_category.TryGetValue(c.id, out var k) ? k : new List<string>())
+                .ToList();
+
             // 区分ID → その区分で使用するサブ分類セット（適用先リンク解決済み・sort_order順）
             // ▼ 修正 [Sprint 7D]：解決ルールを workload_result.get_subgroup_set に一本化した。
             //   以前はここと画面側で同じ判定を二重に書いていたため、
@@ -300,7 +306,8 @@ namespace EA_CostManager.Services
                 // ---- 8. 区分・サブ分類への振り分け ----
                 // 分類判定は正規化した業務内容で行う（表示用の task は元の文字列を維持）
                 string norm_task = normalize(g.Key.task);
-                int? cat_id = classify_category(norm_task, result.categories, kw_by_category);
+                int cat_idx = classify_index(norm_task, kw_in_category_order);
+                int? cat_id = cat_idx < 0 ? null : result.categories[cat_idx].id;
                 int? sub_id = null;
                 if (cat_id.HasValue)
                     sub_id = classify_subgroup(norm_task, subgroup_set_by_category[cat_id.Value], kw_by_subgroup);
@@ -334,25 +341,30 @@ namespace EA_CostManager.Services
 
         /// <summary>
         /// 業務区分の判定。区分の sort_order 順（categories は取得時にソート済み）→
-        /// キーワードの priority 順で評価し、最初にマッチした区分IDを返す。
-        /// どの区分にもマッチしなければ null（未分類）。
+        /// キーワードの priority 順で評価し、最初にマッチした区分を返す。
+        ///
+        /// ▼ 修正 [Sprint 7D]：判定の中身を classify_index に切り出して公開した。
+        ///   分類設定ダイアログの該当件数プレビューが同じ規則で数える必要があるが、
+        ///   編集中の区分は未保存でIDを持たないため、IDに依存しない形にしている。
+        ///   ここを二重に書くと、プレビューの数字と実際の集計がずれる。
         /// </summary>
-        private static int? classify_category(
-            string norm_task,
-            List<workload_category> categories,
-            Dictionary<int, List<string>> kw_by_category)
+        /// <param name="norm_task">正規化済みの業務内容</param>
+        /// <param name="keywords_in_order">
+        /// 評価したい順（区分の sort_order 順）に並べた、正規化済みキーワードの配列。
+        /// </param>
+        /// <returns>最初にマッチした位置。どれにもマッチしなければ -1</returns>
+        public static int classify_index(string norm_task, IReadOnlyList<List<string>> keywords_in_order)
         {
-            if (norm_task.Length == 0) return null;
-            foreach (var cat in categories)
+            if (norm_task.Length == 0) return -1;
+            for (int i = 0; i < keywords_in_order.Count; i++)
             {
-                if (!kw_by_category.TryGetValue(cat.id, out var kws)) continue;
-                foreach (var kw in kws)
+                foreach (var kw in keywords_in_order[i])
                 {
                     if (norm_task.Contains(kw, StringComparison.Ordinal))
-                        return cat.id;
+                        return i;
                 }
             }
-            return null;
+            return -1;
         }
 
         /// <summary>
