@@ -126,6 +126,16 @@ namespace EA_CostManager
                 }
                 write_log("Workloadマイグレーション完了（ローカルDB）");
 
+                // ▼▼▼ 追加 [Sprint 7E] 表示状態（折りたたみ）テーブルマイグレーション ▼▼▼
+                // 原価集計の月度・工数表のサブ分類グループの折りたたみ状態を覚えるための2テーブル。
+                // CREATE TABLE IF NOT EXISTS のため冪等（既存テーブルへの変更なし）
+                write_log("ViewStateマイグレーション開始（ローカルDB）");
+                using (var conn = database_manager.create_connection())
+                {
+                    ViewStateMigration.migrate(conn);
+                }
+                write_log("ViewStateマイグレーション完了（ローカルDB）");
+
                 // ▼ 追加（v1.0.2）：スプラッシュステータス更新
                 _splash.update_status("NAS接続を確認中...");
 
@@ -321,6 +331,23 @@ namespace EA_CostManager
                         catch (Exception ex_mig_wl)
                         {
                             write_log($"Workloadマイグレーションスキップ（NAS DB）: {ex_mig_wl.Message}");
+                        }
+
+                        // ▼▼▼ 追加 [Sprint 7E] NAS DBにも表示状態（折りたたみ）テーブルを作成 ▼▼▼
+                        // 折りたたみ状態は create_connection() 経由で読み書きするため、
+                        // NAS 有効時は NAS DB 側にテーブルが無いと保存・復元が効かない。
+                        try
+                        {
+                            write_log("ViewStateマイグレーション開始（NAS DB）");
+                            using (var conn_nas_vs = create_startup_connection())
+                            {
+                                ViewStateMigration.migrate(conn_nas_vs);
+                            }
+                            write_log("ViewStateマイグレーション完了（NAS DB）");
+                        }
+                        catch (Exception ex_mig_vs)
+                        {
+                            write_log($"ViewStateマイグレーションスキップ（NAS DB）: {ex_mig_vs.Message}");
                         }
 
                         // ▼▼▼ [現場タブ追跡] NAS DBに current_tab カラムを追加 ▼▼▼

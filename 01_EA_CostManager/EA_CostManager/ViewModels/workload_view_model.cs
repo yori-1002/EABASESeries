@@ -149,6 +149,10 @@ namespace EA_CostManager.ViewModels
         //   状態は各 workload_tab_item が持つ（＝Expander は自分のタブの値だけを見る）が、
         //   タブは再集計のたびに作り直されるため、VM側の辞書にも控えて生成時に復元する。
         //   キー ＝ 案件ID + 区分ID。これにより現場タブを往復しても状態が保たれる。
+        //
+        // ▼ 修正 [Sprint 7E]：この辞書をDB（workload_collapse_states）にも保存する。
+        //   従来はVMのフィールドだけだったため、アプリを再起動すると必ず全展開に戻っていた。
+        //   折りたたんだ状態で終了したなら、次に開いたときも折りたたんだままにする。
         private readonly Dictionary<string, bool> _expanded_by_tab = new();
 
         /// <summary>開閉状態の既定値（展開状態＝従来の見え方を維持）</summary>
@@ -156,7 +160,73 @@ namespace EA_CostManager.ViewModels
 
         /// <summary>開閉状態の保存キー（案件ID＋区分ID）</summary>
         private static string expand_key(int project_id, workload_tab_item tab)
-            => $"{project_id}|{tab.category_id?.ToString() ?? "-"}";
+            => expand_key(project_id, tab.category_id);
+
+        private static string expand_key(int project_id, int? category_id)
+            => $"{project_id}|{category_id?.ToString() ?? "-"}";
+
+        /// <summary>
+        /// ▼ 追加 [Sprint 7E]：折りたたみ状態をDBから読み込む。
+        /// 既定は展開のため、折りたたまれているタブ（is_collapsed=1）だけを持つ。
+        /// 表示上の好みであり業務データではないので、失敗しても画面は出す
+        /// （その場合は既定の全展開になるだけ）。
+        /// </summary>
+        private async Task load_collapse_states_async()
+        {
+            try
+            {
+                using var conn = database_manager.create_connection();
+                var rows = await conn.QueryAsync<(int project_id, int category_id)>(@"
+                    SELECT project_id, category_id FROM workload_collapse_states
+                     WHERE pc_user_id = @uid AND is_collapsed = 1",
+                    new { uid = UserSession.user_id });
+
+                _expanded_by_tab.Clear();
+                foreach (var r in rows)
+                {
+                    int? cat = r.category_id == ViewStateMigration.NO_CATEGORY
+                             ? (int?)null : r.category_id;
+                    _expanded_by_tab[expand_key(r.project_id, cat)] = false;   // 行がある＝折りたたみ
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"工数表の折りたたみ状態復元エラー: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// ▼ 追加 [Sprint 7E]：1タブ分の折りたたみ状態をDBへ保存する。
+        /// 展開に戻したときは行を消す（既定＝展開のため、行を残す意味がない）。
+        /// </summary>
+        private static async Task save_collapse_state_async(int project_id, int? category_id, bool expanded)
+        {
+            try
+            {
+                int cat = category_id ?? ViewStateMigration.NO_CATEGORY;
+                using var conn = database_manager.create_connection();
+
+                if (expanded)
+                {
+                    await conn.ExecuteAsync(@"
+                        DELETE FROM workload_collapse_states
+                         WHERE pc_user_id = @uid AND project_id = @pid AND category_id = @cid",
+                        new { uid = UserSession.user_id, pid = project_id, cid = cat });
+                }
+                else
+                {
+                    await conn.ExecuteAsync(@"
+                        INSERT OR REPLACE INTO workload_collapse_states
+                            (pc_user_id, project_id, category_id, is_collapsed, updated_at)
+                        VALUES (@uid, @pid, @cid, 1, datetime('now','localtime'))",
+                        new { uid = UserSession.user_id, pid = project_id, cid = cat });
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"工数表の折りたたみ状態保存エラー: {ex.Message}");
+            }
+        }
 
         /// <summary>開閉ボタンの表示文言（選択中の区分タブの状態と逆の操作を示す）</summary>
         public string expand_toggle_text =>
@@ -212,6 +282,11 @@ namespace EA_CostManager.ViewModels
             tab.all_expanded = next;                                   // このタブのExpanderだけが追従
             _expanded_by_tab[expand_key(project.id, tab)] = next;      // 再生成に備えて控える
             OnPropertyChanged(nameof(expand_toggle_text));             // ボタン文言を更新
+
+            // ▼ 追加 [Sprint 7E]：次回起動時にも同じ状態で開けるようDBへ残す。
+            //   表示上の好みのため、保存の完了を待たずにボタンの反応を返す
+            //  （保存に失敗しても画面の操作は妨げない）。
+            _ = save_collapse_state_async(project.id, tab.category_id, next);
         }
 
         // ============================================================
@@ -265,6 +340,9 @@ namespace EA_CostManager.ViewModels
         {
             if (_initialized) return;
             _initialized = true;
+            // ▼ 追加 [Sprint 7E]：タブを組み立てる前に、前回の折りたたみ状態を読み込む
+            //   （タブ生成時に _expanded_by_tab から復元されるため、順序が重要）
+            await load_collapse_states_async();
             await load_projects_async();
         }
 
