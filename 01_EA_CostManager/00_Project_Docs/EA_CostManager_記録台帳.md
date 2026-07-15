@@ -34,14 +34,18 @@
 | 製品名 | EA_CostManager（EA 原価集計管理システム） | 設計書表紙 |
 | 種別 | 社内業務システム（Windowsデスクトップ） | 設計書 1.1 |
 | 技術 | C# / WPF / .NET 10（self-contained 単一exe配布） | csproj・設計書 1.2 |
-| 設計書バージョン | **v1.2.1**（2026/07/15・作成者: 仲 良智）。v1.2.0 の単価キー記述の誤りを訂正した版（6.4 参照） | docx 表紙 |
-| コミット済み最新 | **v1.1.0**（コミット `2e88a85` / `e701411`） | git log |
-| csproj バージョン | **v1.1.0 のまま**（`<Version>1.1.0`） | csproj 21–23行 |
-| v1.2.0 の実装状態 | **作業中（未コミット）**。工数表機能の新規ファイル群がステージ前 | git status |
+| 設計書バージョン | **v1.2.1**（2026/07/15・作成者: 仲 良智）。v1.2.0 の単価キー記述の誤りを訂正した版（6.4 参照）。**※ 本体は v1.3.1 のため設計書が遅れている**（10章 #10） | docx 表紙 |
+| コミット済み最新 | **v1.3.1**（コミット `bdffa52`・develop） | git log |
+| csproj バージョン | **v1.3.1**（`<Version>1.3.1`） | csproj 34–36行 |
+| インストーラ版数 | **v1.3.1**（`EA_CostManager_setup.iss` の `MyAppVersion`） | .iss 29行 |
+| v1.3.1 の実装状態 | **develop にコミット済み・リリースビルド作成済み**（`EA_CostManager/publish/`）。**main へは未反映**・インストーラ未作成 | git log / publish 出力 |
 
-> ⚠️ **重要な事実**: 設計書は v1.2.0 だが、csproj のバージョンはまだ **1.1.0**、git 最新コミットも v1.1.0。
-> つまり v1.2.0（工数表機能）は「設計書は書き上がっているが、コード側はまだリリースビルド・コミット前」の段階と考えられる。
-> v1.2.0 として確定させるには、後述の「10. 設計書と実装の差分・要確認点」の対応が必要。
+> ⚠️ **リリース番号の経緯（2026-07-15）**: 前回リリースは v1.1.0。開発中に付番した **v1.2.1 / v1.2.2 は develop 内のみで一度もリリースしていない**。
+> 工数表という新機能の追加のためマイナーを上げ、**v1.3.0** としてリリース版を確定（その後の折りたたみ修正で v1.3.1）。
+>
+> ⚠️ **バージョン表記は2箇所ある**: `csproj` の `<Version>`（画面左下・バナー・publish の `01_version.txt` はすべてここから自動連動）と、
+> `EA_CostManager_setup.iss` の `MyAppVersion`（**自動連動しない**）。実際に .iss が v1.1.0 のまま取り残されており、
+> 中身は新版なのにインストーラー名・レジストリ・「プログラムと機能」の表示だけ旧版になる状態だった（2026-07-15 に修正）。**片方だけ変えないこと**。
 
 ---
 
@@ -148,8 +152,9 @@ MVVM構成。`.cs` 実ソース合計 **約22,094行**（obj/bin除く）。以�
 | ファイル | 行 | 役割 |
 | --- | --- | --- |
 | `Data/database_manager.cs` | 811 | ★DB接続・スキーマ作成・バックアップ・破損検証・復元（`has_active_wal`/`restore_from_file`） |
-| `Data/V2Migration.cs` | 296 | スキーマ移行（V2） |
-| `Data/WorkloadMigration.cs` | 113 | ★工数表5テーブルの冪等作成（**v1.2.0 新規**） |
+| `Data/V2Migration.cs` | 296 | スキーマ移行（V2）。**ローカルDBにしか走らない**（NAS DB には別途対応が必要） |
+| `Data/WorkloadMigration.cs` | 206 | ★工数表6テーブルの冪等作成（**v1.2.0 新規**／v1.3.0 で `workload_subgroup_links` 追加＋旧構造からの一度きりの自動変換 `backfill_subgroup_links`） |
+| `Data/ViewStateMigration.cs` | 105 | ★折りたたみ状態2テーブルの冪等作成（**v1.3.0 新規**）。`month_collapse_states`（DDL欠落の是正）/ `workload_collapse_states`。定数 `NO_CATEGORY` / `NO_SUBGROUP` = -1 |
 | `Data/ErrorLogMigration.cs` | 64 | error_logs 移行 |
 | `Data/CategoryGroupMigration.cs` | 32 | 区分結合設定移行 |
 
@@ -376,15 +381,33 @@ pc_users / user_sessions / operation_logs / error_logs（7日自動削除）/ ap
 | --- | --- |
 | workload_categories | 業務区分（案件ごと・タブ表示）。`sort_order`=タブ順かつ判定順 |
 | workload_category_keywords | 区分の検出キーワード。`priority`=区分内評価順 |
-| workload_subgroups | サブ分類。`category_id` NULL=案件共通／値あり=区分個別 |
+| workload_subgroups | サブ分類（**案件単位**）。`category_id` は **v1.3.0 で廃止**（旧: NULL=案件共通／値あり=区分個別）。列は旧データ保全のため残すが現行コードは参照せず、新規行は NULL |
 | workload_subgroup_keywords | サブ分類の検出キーワード |
-| workload_subgroup_modes | 区分ごとのサブ分類モード（common/custom/none。行なし=common）。`uq_workload_modes` で `(project_id, category_id)` を UNIQUE ＝ UPSERT 可能 |
+| **workload_subgroup_links** | **v1.3.0 新設**。サブ分類 × 業務区分の**適用先（多対多）**。この行があるサブ分類だけがその区分タブに出る＝適用先の唯一の根拠。`uq_workload_sub_links` で `(subgroup_id, category_id)` を UNIQUE |
+| workload_subgroup_modes | 区分ごとのサブ分類モード。**v1.3.0 で common / none の2値に整理**（`custom` は廃止＝適用先を区分ごとに選べるため共通／専用の区別が不要になった。旧データの `custom` は移行時に `common` へ寄せる。読み込み側は「`none` 以外＝分ける」として扱うため互換）。`uq_workload_modes` で `(project_id, category_id)` を UNIQUE ＝ UPSERT 可能 |
+
+**サブ分類の適用先（v1.3.0 の設計変更）**
+- 旧構造は「案件共通（common モードの全区分に表示）」か「1区分専用」の二択しか持てず、**共通で1件追加すると全ての区分タブに同じサブ分類が出てしまう**問題があった。区分↔サブ分類を多対多にして解決。
+- **既存データは起動時に一度だけ自動変換**（`app_settings` の `workload_subgroup_links_migrated` フラグで管理）。旧構造で実際に表示されていた組み合わせをそのままリンクにするため、**移行の前後で集計結果は一致する**。1回だけ実行するのは、移行後に利用者がチェックを外して適用先を減らすのは正常な操作であり、毎回流すとその設定を旧データから復活させてしまうため。
+- 区分を削除しても**サブ分類本体は削除しない**（適用先リンクを外すだけ）。サブ分類は案件単位の資産で、他の区分にも適用されうるため。旧実装は `category_id` が一致するサブ分類を削除していた（v1.3.0 で修正）。
+
+### 7.5 表示状態テーブル（v1.3.0 新設・`Data/ViewStateMigration.cs`）
+| テーブル | 説明 |
+| --- | --- |
+| month_collapse_states | 原価集計・月度の折りたたみ（`pc_user_id` × `filter_tab_id` × `fiscal_month`）。`uq_month_collapse` で UNIQUE ＝ `INSERT OR REPLACE` が UPSERT として成立 |
+| workload_collapse_states | 工数表・サブ分類グループの折りたたみ（`pc_user_id` × `project_id` × `category_id` × `subgroup_id`）。`uq_workload_collapse` で UNIQUE |
+
+- ⚠️ **`month_collapse_states` は読み書きコードだけが先に存在し、`CREATE TABLE` がどこにも無かった**（実DBにも不在＝テーブル26個中に無し）。`filter_tab_view_model` の save/restore は例外を `Debug.WriteLine` で握り潰すため、**無言で永続化が効いていない**状態が続いていた。v1.3.0 で DDL を追加し、既存コードがそのまま機能するようにした。
+- 既定は「展開」。**折りたたんだものだけを行として持ち、展開に戻したら行を消す**（自己クリーニング）。
+- 区分IDを持たないタブ（[全体]・[未分類]）は `NO_CATEGORY(-1)`、「（サブ未分類）」グループは `NO_SUBGROUP(-1)` で表す。**SQLite の UNIQUE は NULL 同士を別物として扱い重複を防げない**ため、NULL を使わない。
+- 利用者ごとの見た目の好みだが、`pc_user_id` を持たせて**共有DB上に置く**（同じ利用者が別PCでも同じ状態で開ける）。`user_settings.json` はPC単位のためこの用途には使わない。
 
 **共通仕様（実ファイル確認済み）**
 - 全テーブル共通カラム: `id INTEGER PRIMARY KEY AUTOINCREMENT` / `created_at`・`updated_at TEXT DEFAULT (datetime('now','localtime'))` / `updated_by TEXT DEFAULT ''`。マスタ系は `sort_order INTEGER NOT NULL DEFAULT 0` / `is_active INTEGER NOT NULL DEFAULT 1`、キーワード系は `priority INTEGER NOT NULL DEFAULT 0`。
-- インデックス5本: `idx_workload_categories_project` / `idx_workload_cat_kw_category` / `idx_workload_subgroups_project` / `idx_workload_sub_kw_subgroup` / `uq_workload_modes`(UNIQUE)。
+- インデックス: `idx_workload_categories_project` / `idx_workload_cat_kw_category` / `idx_workload_subgroups_project` / `idx_workload_sub_kw_subgroup` / `uq_workload_modes`(UNIQUE) / **`uq_workload_sub_links`(UNIQUE) / `idx_workload_sub_links_category` / `uq_month_collapse`(UNIQUE) / `uq_workload_collapse`(UNIQUE)**。
 - ⚠️ **FOREIGN KEY は一切宣言されていない**。参照整合はアプリ側（保存時のカスケードDELETE）で担保している。
 - 保存先は **NAS DB**（分類設定は全PCで共有）。`App.xaml.cs` でローカルDB・NAS DB の両方にマイグレーションを実行。
+  折りたたみ状態も `create_connection()` 経由で読み書きするため**NAS DB 側にもテーブルが必要**（`V2Migration` はローカルDBにしか走らないため、そこには置けない）。
 
 ---
 
@@ -423,8 +446,8 @@ pc_users / user_sessions / operation_logs / error_logs（7日自動削除）/ ap
 
 | # | 事実 | 確度 | 影響／推奨アクション |
 | --- | --- | --- | --- |
-| 1 | csproj の `<Version>` が **1.1.0 のまま**（設計書は v1.2.0） | **確定**（csproj 21–23行） | v1.2.0 として確定させるなら csproj のバージョンと `setup.iss` を 1.2.0 へ更新が必要 |
-| 2 | 工数表機能の新規ファイル群が**未コミット**（git status で `??`／`M`） | **確定**（git status） | v1.2.0 はコミット・ビルド前の作業中。リリース前にコミット要 |
+| 1 | ~~csproj の `<Version>` が **1.1.0 のまま**~~ → **2026-07-15 解消**。csproj・`setup.iss` とも **v1.3.1** に更新 | **確定**（csproj 34–36行・.iss 29行） | **対応完了**。`.iss` 側は csproj から自動連動しないため、**今後もリリースのたびに2箇所を合わせること**（0章の注意書き参照） |
+| 2 | ~~工数表機能の新規ファイル群が**未コミット**~~ → **2026-07-15 解消**。develop に7コミット（`9f772d2`〜`bdffa52`）・リリースビルド作成済み | **確定**（git log・publish 出力） | **対応完了**。ただし **main へは未反映**・**インストーラ未作成**・**画面での動作確認が未実施**（#12） |
 | 3 | 設計書に個別記載のない実装ファイルが存在：`workload_classify_view_model.cs`(914行)・`WorkloadClassifyDialog`・`WorkloadCopyDialog`・`WorkloadKeywordDialog` | **確定**（存在・役割とも 2026-07-15 の精査で確定。「12.1」参照） | 設計書は分類設定UIを「暫定（標準区分セット作成）」とするが、**実装は3ペインの本格的な分類設定UI＋他案件コピー＋明細からのキーワード登録まで到達しており、設計書より先行している**（確定）。→ 次回の設計書更新で反映が必要 |
 | 9 | ~~**工数表と業務単位集計の合計が、サブ分類なしの全体表示でもズレる**（単価キーの優先順が逆）~~ → **2026-07-15 修正済み**（12章の該当ログ参照） | **確定**（実ソース＋実DB調査で裏付け済み） | **対応完了**。`WorkloadAggregationService.cs:173-174` のキー優先順を `engineer_daily_rate`→`engineer_rate` に逆転し、設定画面・日単位集計・業務単位集計・工数表の4者が同じ値を見るようにした。詳細な調査結果は「6.4」参照 |
 | 6 | 設計書 6.1 の「対象案件＝`agg_mode='task'` のみ」という記述が実装と不一致。実装は `cost_filter_tabs`(`agg_mode='task' AND is_archived=0`)との **OR 条件** | **確定**（`workload_view_model:266-277`・`[9A-fix2]` コメント） | 本 md 6.1 は 2026-07-15 に修正済み。**設計書側も次回更新時に要修正** |
@@ -432,10 +455,15 @@ pc_users / user_sessions / operation_logs / error_logs（7日自動削除）/ ap
 | 8 | `ProjectGroupService.build_groups_auto` / `extract_prefix` が実装済みだが**現行フローから未呼出**（Sprint 9B 用） | **確定**（grep で呼出なし・コード内コメントにも明記） | デッドコードではなく次期用の先行実装。11章の「Sprint 9B: 大区分の自動抽出」に対応 |
 | 4 | パッケージ `CommunityToolkit.Mvvm 8.3.2` が設計書の主要ライブラリ一覧に未記載 | **確定**（csproj 80行） | MVVM基盤なので設計書 2.2 に追記するのが望ましい |
 | 5 | ~~設計書 docx がルート直下と `doc/` に二重・複数版で並存~~ → **2026-07-15 解消**。`00_Project_Docs/` に集約し v1.2.1 へ一本化（12章の該当ログ参照） | **確定**（`ls 00_Project_Docs/`・git status） | **対応完了**。旧 v1.2.0 は削除したが、削除前に一度コミットしたため**git 履歴から復元可能**。誤って旧版（単価キーの誤記述あり）を開く事故はこれで起きない |
+| 10 | **設計書2点が v1.2.1 のままで、本体 v1.3.1 の変更が未反映**。特に「サブ分類は案件共通／区分専用の二択」「モードは common/custom/none の3値」は**現行実装と食い違う**（v1.3.0 で多対多化・`custom` 廃止） | **確定**（docx 表紙・`WorkloadMigration.cs`） | ⚠️ **6.4 と同じ事故の再発リスク**。設計書どおりに実装し直すと `[Sprint 7D]` が巻き戻る。運用ルール #2 に基づき、v1.3.x を織り込んだ**完全版として設計書を更新**すること（`workload_subgroup_links`・`workload_collapse_states`・`month_collapse_states`・`classify_index` の共通化を反映） |
+| 11 | **運用ルール #1（その都度 md へ反映）が本 md の内部にしか書かれておらず、作業者がこの md を読むまでルールを認識できない**。実際に v1.2.1〜v1.3.1 の7コミットが未反映のまま進行し、yori の指摘で事後にまとめて追記した | **確定**（12章の 2026-07-15 最終ログ・`ls CLAUDE.md` で不在を確認） | **恒久対策としてリポジトリ直下に `CLAUDE.md` の新設を提案**。AIコーディング支援は `CLAUDE.md` を自動で読み込むため、そこに「本台帳の場所」「運用ルール #1〜#4」「続きを進める＝3点を読む」を書けば、**読み忘れが構造的に起きなくなる**。本 md には詳細を残し、`CLAUDE.md` からは参照させる（二重管理を避ける） |
+| 12 | **v1.3.1 の一連の変更は画面での動作確認が未実施**（工数表の分類設定・折りたたみ・原価集計の現場情報バー） | **確定**（作業ログ） | インストーラ作成・配布の前に実機確認を推奨。特に**起動時に DB マイグレーションが走る**（サブ分類の適用先変換・折りたたみテーブル作成）ため、まず工数表の集計値が従来どおりであることを確認すること |
 
 > これらは「バグ」ではなく**リリース確定前の作業途中に見える状態**。正確性重視の観点で、
 > v1.2.0 を正式確定する前に #1〜#3・#6 の整合を取ることを推奨する。
 > ※ #3 の各ダイアログの内部仕様は **2026-07-15 に精査済み**（「12.1」に記載）。この時点で #3・#6 は「推測」から「確定」に更新した。
+> ※ **2026-07-15 追記**: #1・#2・#5・#9 は対応完了。**未対応は #10（設計書の追随・最優先）／#11（CLAUDE.md 新設）／#12（実機確認）**。
+> #3・#4・#6・#7 は #10 の設計書更新にまとめて織り込むこと。
 > ※ #9（単価キー不一致）は合計金額に直接影響する**実バグ**だったが、**2026-07-15 に修正済み**（6.4 参照）。
 > 実DBに `engineer_daily_rate` 行が未作成だったため表面化していなかった潜在バグで、設定画面で単価を1回変更した時点で顕在化する状態だった。
 
@@ -476,6 +504,15 @@ pc_users / user_sessions / operation_logs / error_logs（7日自動削除）/ ap
 | 2026-07-15 | v1.2.1 | `doc/EA_CostManager_記録台帳.md` | 上記の設計書訂正を反映。0章サマリの設計書バージョンを v1.2.1 に、本記録台帳の位置づけの参照先を v1.2.1 に更新。6.4「旧記述の誤り」に「同じ誤りが設計書2点にも載っていた（訂正済み）」節を追加。 | 修正 |
 | 2026-07-15 | — | `00_Project_Docs/`（新設）<br>`.gitignore`<br>`EA_CostManager/doc/`（廃止） | **ドキュメントを `00_Project_Docs/` に集約し、git 管理下に置いた（yori 指示）**。①**移動**：`EA_CostManager/doc/`（＝C#プロジェクトフォルダの**内側**にあった）を `01_EA_CostManager/00_Project_Docs/` へ移動・改称。設計書・要件定義書・記録台帳・操作マニュアル pptx を集約。`.csproj`／`setup.iss` は `doc/` を参照していないためビルド・配布への影響なし（grep で確認）。②**git 管理化**：`.gitignore` の `doc/` 除外行を削除。**容量を実測して判断**＝`.git` 実体 1.94MB／記録台帳MD 57KB（gzip 21KB）／docx 各30〜40KB。MDはテキストで差分圧縮が効き、docx はバイナリで1版40KB増だが、GitHub の警告水準（1ファイル50MB・リポジトリ1GB）と桁が3つ違うため**容量は問題にならない**と結論。③**重複解消**：ルート直下と `doc/` の v1.2.0 docx は md5 一致の完全な重複だったため、ルート側を削除。④**旧版削除**：v1.2.0 docx 2本を削除し v1.2.1 に一本化。ただし v1.2.0 は**一度もコミットされておらず**（ルートは未追跡・`doc/` は除外）そのまま消すと復元不可だったため、**先に集約状態をコミットして履歴に残してから次コミットで削除**する2段階とした。⑤**副次修正**：`.gitignore` の末尾が `.DS_Store* . e x e` と壊れていた（コミット済みHEAD版は UTF-16LE の NUL バイト混入＝git が**バイナリ扱い**し差分表示不能。PowerShell の既定 UTF-16 書き込みが原因と推定）。UTF-8 で書き直し、`.DS_Store` と `*.exe` を正しい2行に分離して修復。⑥運用ルール #2・#3、本台帳の位置づけ、10章 #5 のパス参照を新フォルダに更新。 | 追加 |
 | 2026-07-15 | v1.2.0 | `doc/EA_CostManager_記録台帳.md` | 上記 `[9D-2]` を反映。3.4（`workload_view_model.cs` 743→790・開閉の粒度）／12.1 の行数（VM 790・WorkloadPage.xaml 487）を最新化。**本追記時点で、MD の記載が `[9D]` 止まりで `[9D-2]` が未反映になっていた**（運用ルール #1 の取りこぼし）ため、実ファイル突き合わせのうえ補記した。 | 修正 |
+| 2026-07-15 | v1.2.1 | 工数表の新規ファイル群<br>`App.xaml.cs` ほか既存4本<br>`00_Project_Docs/` docx 2点<br>`.gitignore` | **12.1 に遡及記載していた工数表機能を初コミット（`9f772d2`）**。新規19ファイル＋既存改修。設計書・要件定義書を v1.2.1 として `00_Project_Docs/` に集約。`.gitignore` を UTF-16→UTF-8 へ変換（内容は同一）。v1_2_0 の docx 2点は yori 指示により**コミットせずローカルに残置**。ビルド成功（0エラー／警告2＝既存の SQLitePCLRaw 脆弱性アドバイザリ）。 | 追加 |
+| 2026-07-15 | v1.2.2 | `Data/WorkloadMigration.cs`<br>`Models/workload_models.cs`<br>`Services/WorkloadAggregationService.cs`<br>`ViewModels/workload_classify_view_model.cs`<br>`Views/WorkloadClassifyDialog.xaml` | **サブ分類の適用先を区分タブごとに選べるよう多対多化（`[Sprint 7D]`・コミット `23e3397`）**。症状＝分類タブでサブ分類を1件登録すると**全ての区分タブに反映されてしまう**。原因＝サブ分類が「案件共通（common モードの全区分に表示）」か「1区分専用」の二択しか持てない構造だったこと。実装：①`workload_subgroup_links`（サブ分類 × 区分）を追加し**適用先の唯一の根拠**にする ②分類設定ダイアログにサブ分類一覧＋「適用する区分タブ」チェックリスト（全選択／全解除つき）を追加＝後からの変更もチェック切替だけ ③サブ分類追加時の適用先は**選択中の区分1つだけ**を初期値に ④**区分の削除がサブ分類本体を巻き込まないよう、適用先リンクの削除のみに変更**（サブ分類は案件単位の資産で他区分にも適用されうるため。旧実装は `category_id` 一致のサブ分類を削除していた＝別バグ） ⑤モードを common/none の2値に整理（`custom` 廃止） ⑥既存データは起動時に一度だけ自動変換（`app_settings` の `workload_subgroup_links_migrated`）。旧構造で表示されていた組み合わせをそのままリンクにするため**集計結果は不変**。1回だけなのは、移行後に利用者が外した適用先を再実行で復活させないため ⑦適用先未設定のサブ分類がある場合は保存前に確認。**検証**：実際の `WorkloadMigration` を取り込んだ検証プログラムで、旧構造（共通／専用／使わない・複数案件）からの変換結果が旧表示と一致すること・モード整理・冪等性・「外した設定が復活しないこと」の4点を確認。**画面での動作確認は未実施**。 | 修正 |
+| 2026-07-15 | v1.2.2 | `Views/CostPage.xaml` | **原価集計の現場情報バーで、詳細が長いとボタンが潰れる問題を修正（コミット `bd89393`）**。原因は `DockPanel` の子の宣言順＝現場情報（左）を最初の子にしていたため、そちらが先に必要なだけ幅を確保していた。加えて現場情報が横並びの `StackPanel` で、**子には無限幅が与えられる**ため詳細がいくら長くても折り返さず伸び続けていた。修正：①ボタン類を先に宣言して幅を確保し、現場情報は最後の子（`LastChildFill`）として残り幅に収める ②現場情報を `Grid` にして**詳細の列だけを `*`** にし幅を確定＝残り幅で折り返す（表示順は従来どおり） ③長文でバーが高くなりすぎないよう2行まで（`MaxHeight=34`）とし、続きは省略記号＋ツールチップ。`find_ancestor` によるハンドラのVM解決は DataContext 経由のため並び替えの影響を受けないことを確認。行数 1093→**1148**。**画面での動作確認は未実施**。 | 修正 |
+| 2026-07-15 | v1.2.2 | `Services/WorkloadAggregationService.cs`<br>`ViewModels/workload_classify_view_model.cs`<br>`EA_CostManager.csproj` | **サブ分類の該当件数を適用先の区分基準に変更／バージョン表記を更新（コミット `a24376f`）**。①**件数**：案件全体の業務行に対して数えていたため実際にタブに出る件数と大きくズレていた（例：適用先では3件なのに132件と表示）。共通／専用の二択だった頃は目安として妥当だったが、適用先を区分ごとに選ぶ今は誤解を招くため、**適用先にチェックした区分に振り分けられた行の中だけ**で数えるようにした ②**判定規則の共通化**：区分判定（並び順に評価して最初に当たった区分が取る）を `WorkloadAggregationService.classify_index` として公開し、集計本体とプレビューで**同じ関数を共有**（二重に書くとプレビューと実際の集計がずれるため。`classify_category` は廃止し、キーワードはループ外で1度だけ用意して性能を維持） ③**再計算漏れの修正**：区分の**削除・並び替え**で件数が再計算されていなかった（並び順＝判定の優先順のため振り分け先が変わる）。適用先チェックの ON/OFF・「分けない」切替でも数え直す ④区分とサブ分類で該当件数の意味が異なるため説明文を両方に触れる形へ ⑤csproj が 1.1.0 のままで**起動しているのが修正前後どちらのビルドか判別できなかった**（実際に確認作業で混乱の原因になった）ため 1.2.2 に更新。画面表示・バナーはすべて `AssemblyVersion` 連動のため csproj のみの変更で全箇所へ反映。 | 修正 |
+| 2026-07-15 | v1.3.0 | `Data/ViewStateMigration.cs`（新規）<br>`App.xaml.cs`<br>`ViewModels/workload_view_model.cs` | **折りたたみ状態が再起動で展開に戻る問題を修正（`[Sprint 7E]`・コミット `b13238f`）**。原因は画面ごとに**別物が2つ**あった。①**原価集計・月度**＝読み書きコード（`filter_tab_view_model` の restore/save 3メソッド）は以前からあったが、**`month_collapse_states` の `CREATE TABLE` がどこにも無く、実DBにも存在しなかった**（テーブル26個中に無し）。両メソッドは例外を `Debug.WriteLine` で握り潰すため**無言で永続化が効いていない**状態だった。テーブルを作ることで既存コードがそのまま機能する。`INSERT OR REPLACE` が UPSERT として成立するよう UNIQUE 索引も付与 ②**工数表**＝そもそも永続化しておらず、開閉状態は VM のフィールドだけにあった（再集計・現場タブ往復では保つが再起動で必ず失われる）。`workload_collapse_states` へ保存し、ページ初期化時に**タブを組み立てる前に**読み戻す。`App.xaml.cs` のローカルDB・NAS DB 両方から呼ぶ（折りたたみ状態は `create_connection()` 経由で読み書きするため NAS 側にもテーブルが必要。`V2Migration` はローカルDBにしか走らないため使えない）。**検証**：実際の `ViewStateMigration` を取り込んだ検証プログラムで6項目（作成の冪等性・既存の月度SQL（UPSERT/復元/一括保存）がそのまま通ること・区分なしタブが重複しないこと・展開時の行削除）を確認。 | 追加 |
+| 2026-07-15 | v1.3.0 | `EA_CostManager.csproj`<br>`EA_CostManager_setup.iss` | **リリース版数を v1.3.0 に確定（コミット `9eb1a23`）**。前回リリースが v1.1.0 で、v1.2.1 / v1.2.2 は develop 内のみの未リリース版のため、新機能（工数表）の追加としてマイナーを上げた。**`.iss` の `MyAppVersion` が v1.1.0 のまま取り残されていた**ことを発見し是正——そのままだと `EA_CostManager_setup_v1.1.0.exe` として出力され、レジストリと「プログラムと機能」の表示も 1.1.0 になるところだった。Inno Setup 側は csproj から自動連動できないため、**両方を合わせる旨を双方のコメントに明記**。 | 修正 |
+| 2026-07-15 | v1.3.1 | `ViewModels/workload_view_model.cs`<br>`Views/WorkloadPage.xaml`<br>`Data/ViewStateMigration.cs`<br>`EA_CostManager.csproj`<br>`EA_CostManager_setup.iss` | **工数表の折りたたみをグループ単位で保存（`[Sprint 7E-2]`・コミット `bdffa52`）**。v1.3.0 でも維持されず、DB を調べると `workload_collapse_states` は**0行＝保存が一度も走っていなかった**（月度側は35行で正常）。原因は保存の粒度とグループとVMの結び方：①状態がタブ単位の bool 1つ（`all_expanded`）しかなく、**見出しを個別に開閉した状態を表現できなかった** ②Expander の `IsExpanded` がタブの `all_expanded` と **`Mode=OneWay`** で結ばれ、個別に開閉しても値がVMへ戻らず保存する手段が無かった ③**グループキーが「笙の川　121 件／…／2,396,050 円」という小計込みの見出し文字列**で、集計値が変わればキーも変わるため開閉状態の安定した目印にできなかった。実装：①`workload_group`（サブ分類ID＋見出し＋開閉状態）を追加し、明細行はこのインスタンスでグループ化（キーがIDベースになり安定） ②`IsExpanded` を `Name.is_expanded` と**双方向**で結び、個別クリックも「すべて折りたたむ」ボタンも**同じ経路でVMに伝わり保存**（ボタンは全グループの `is_expanded` を設定するだけにして保存経路を一本化＝保存漏れが起きない） ③`workload_collapse_states` に `subgroup_id` を追加。旧定義のテーブルが残っていれば検知して作り直す（未リリースかつ保持しているのが折りたたみの好みだけのため） ④「（サブ未分類）」は `NO_SUBGROUP(-1)`（SQLite の UNIQUE は NULL 同士を別物として扱い重複を防げないため） ⑤`all_expanded` をグループ側の状態から算出する値に変更＝`workload_tab_item` から変更通知が不要になり `INotifyPropertyChanged` を除去。**ボタン経路が0行になった直接原因は静的な読みでは特定できず、推測で当てにいかず作りごと入れ替えた**（個別対応には結局この作りを変える必要があり、直せばボタン側も同じ経路を通るため）。**検証**：旧定義テーブルの作り直し・冪等性、グループごとに独立して保存され重複しないこと（サブ未分類・別区分タブの同一サブ分類を含む）、展開に戻すと当該行だけ消えることを確認。行数 VM 790→**946**／XAML 487→**485**。**画面での動作確認は未実施**。 | 修正 |
+| 2026-07-15 | v1.3.1 | `EA_CostManager/publish/`（成果物） | **リリースビルドを作成**。`dotnet publish -c Release -r win-x64 --self-contained true -p:DebugType=embedded -o publish`。出力＝`CostManager.exe`（65.8MB・自己完結シングルファイル）／`01_version.txt`（`1.3.1`・csproj から自動生成）／`icon_fix.ico`。`.iss` の `MySourceDir` が指す場所と一致。EXE のプロパティを実測確認＝FileVersion `1.3.1.0` / ProductVersion `1.3.1+bdffa52`。**インストーラ（Inno Setup）は未作成・main への push も未実施**。 | 追加 |
+| 2026-07-15 | v1.3.1 | `00_Project_Docs/EA_CostManager_記録台帳.md` | **本台帳を v1.2.1〜v1.3.1 の作業に追随させた（運用ルール #1 の取りこぼしを是正）**。⚠️ **経緯の記録**：上記 v1.2.1〜v1.3.1 の一連の作業（コミット `9f772d2`〜`bdffa52` の7コミット）は、**その都度の反映ができておらず、yori の指摘を受けて事後にまとめて追記した**。原因は、運用ルール #1 が本 md の内部にのみ書かれており、作業者（ジェイ）が本 md を読むまでルールの存在を認識していなかったこと。**恒久対策として `CLAUDE.md` の新設を提案**（10章 #11）。反映内容：0章サマリ（版数・リリース経緯・バージョン表記が2箇所ある注意）／3.2（`ViewStateMigration.cs` 追加・`WorkloadMigration.cs` 113→206）／7.4（`workload_subgroup_links` 追加・`category_id` 廃止・モード2値化・適用先の設計変更）／7.5 新設（表示状態テーブル）／12 更新ログ（本表）。行数はすべて実ファイルで実測。 | 修正 |
 
 ### 12.1 v1.2.0 工数表機能（遡及記載・2026-07-15 時点で**未コミット**）
 
