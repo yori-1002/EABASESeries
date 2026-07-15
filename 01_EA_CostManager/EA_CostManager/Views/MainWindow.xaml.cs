@@ -23,6 +23,13 @@ namespace EA_CostManager.Views
         {
             InitializeComponent();
 
+            // ▼▼▼ 追加 [Sprint 9A]：工数表の大区分ツリーをWorkloadPageのVMにバインド ▼▼▼
+            //   工数表の group_items は WorkloadPage が自前で生成した VM が持つため、
+            //   MainWindow の DataContext（main_view_model）からは XAML だけで辿れない。
+            //   そこでコードビハインドから直接 ItemsSource を設定する。
+            //   これにより、大区分の選択状態は原価集計側と完全に独立する。
+            workload_group_list.ItemsSource = workload_page.vm.group_items;
+
             // ▼▼▼ Sprint 5A：Loadedイベントでユーザー確認 ▼▼▼
             Loaded += async (_, _) =>
             {
@@ -291,6 +298,20 @@ namespace EA_CostManager.Views
 
             main_vm.current_page = "cost";
             main_vm.cost_vm.selected_group = group;
+        }
+
+        // ▼▼▼ 追加 [Sprint 9A]：工数表の大区分ツリーのクリック処理 ▼▼▼
+        //   原価集計の group_item_Click と同じ役割だが、更新するのは
+        //   WorkloadPage 側のVMの selected_group であり、原価集計の選択には影響しない。
+        //   選択後、工数表VM側で現場タブが絞り込まれる（rebuild_filtered_projects）。
+        private void workload_group_item_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button btn) return;
+            if (btn.Tag is not project_group_item group) return;
+            if (DataContext is not main_view_model main_vm) return;
+
+            main_vm.current_page = "workload";
+            workload_page.vm.selected_group = group;
         }
 
         // ▼▼▼ [Sprint 5G] キーボードショートカット（ウィンドウ全体で受け取る） ▼▼▼

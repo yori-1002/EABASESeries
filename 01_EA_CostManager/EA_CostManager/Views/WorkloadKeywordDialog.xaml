@@ -1,0 +1,75 @@
+﻿<Window x:Class="EA_CostManager.Views.WorkloadKeywordDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="キーワードを登録"
+        Width="620" Height="330"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#F5F8FB">
+
+    <!-- ▼ 追加 [Sprint 7C-1]：明細行からキーワードを登録する小ダイアログ
+         明細の業務内容を初期値として表示し、その一部を切り出して
+         キーワードにできるようにする。登録先の区分は既存から選ぶか、
+         新しい区分として作成する。 -->
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="元の業務内容" FontSize="12" FontWeight="Bold"
+                   Foreground="#333" Margin="0,0,0,4" />
+        <TextBox Grid.Row="1" x:Name="source_text"
+                 Text="{Binding source_task, Mode=OneWay}"
+                 IsReadOnly="True" TextWrapping="Wrap"
+                 FontSize="12" Padding="6,4" Background="#EEF2F6"
+                 BorderBrush="#DDE6EF" MinHeight="44" Margin="0,0,0,10"
+                 ToolTip="この文章の一部を選択してコピーし、下のキーワード欄に貼り付けることもできます。" />
+
+        <TextBlock Grid.Row="2" Text="登録するキーワード（業務内容にこの語が含まれる行が、選んだ区分に集計されます）"
+                   FontSize="12" FontWeight="Bold" Foreground="#333" Margin="0,0,0,4" />
+        <Grid Grid.Row="3" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0" x:Name="keyword_box"
+                     Text="{Binding keyword, UpdateSourceTrigger=PropertyChanged}"
+                     FontSize="14" Padding="6,5" VerticalContentAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding hit_hint}"
+                       VerticalAlignment="Center" Margin="10,0,0,0"
+                       FontSize="12" FontWeight="Bold" Foreground="#0F5FA8" />
+        </Grid>
+
+        <TextBlock Grid.Row="4" Text="登録先の区分" FontSize="12" FontWeight="Bold"
+                   Foreground="#333" Margin="0,0,0,4" />
+        <StackPanel Grid.Row="5">
+            <ComboBox Height="30" FontSize="12" VerticalContentAlignment="Center"
+                      ItemsSource="{Binding categories}"
+                      SelectedItem="{Binding selected_category}"
+                      DisplayMemberPath="name" Margin="0,0,0,8" />
+            <CheckBox Content="新しい区分として作成する"
+                      IsChecked="{Binding create_new_category}"
+                      FontSize="12" Margin="0,0,0,6" />
+            <TextBox Text="{Binding new_category_name, UpdateSourceTrigger=PropertyChanged}"
+                     IsEnabled="{Binding create_new_category}"
+                     FontSize="13" Padding="6,4"
+                     ToolTip="新しい区分の名前。区分名はそのままキーワードとしても使われます。" />
+            <TextBlock Text="{Binding status_message}" FontSize="11" Foreground="#B45309"
+                       TextWrapping="Wrap" Margin="0,6,0,0" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Margin="0,12,0,0">
+            <Button Content="キャンセル" IsCancel="True" Padding="20,6" FontSize="12" Margin="0,0,8,0" />
+            <Button Content="登録" Click="ok_click" Padding="28,6" FontSize="12" FontWeight="Bold"
+                    Background="#0F5FA8" Foreground="White" BorderThickness="0" />
+        </StackPanel>
+    </Grid>
+</Window>

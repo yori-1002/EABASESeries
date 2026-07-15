@@ -42,6 +42,17 @@ namespace EA_CostManager.ViewModels
             set => SetProperty(ref _is_cost_expanded, value);
         }
 
+        // ▼ 追加 [Sprint 9A]：工数表の大区分ツリーの開閉状態
+        //   原価集計の is_cost_expanded と同じ挙動（工数表ボタンの再クリックでトグル）。
+        //   ツリー自体は各ページのVMが持つ group_items を表示するため、
+        //   原価集計と工数表で選択中の大区分は互いに影響しない。
+        private bool _is_workload_expanded = false;
+        public bool is_workload_expanded
+        {
+            get => _is_workload_expanded;
+            set => SetProperty(ref _is_workload_expanded, value);
+        }
+
         // ▼▼▼ 追加：オンラインユーザー一覧（ユーザー名＋現在の現場タブ）▼▼▼
         public ObservableCollection<online_user_item> online_users { get; } = new();
         // 後方互換用：online_user_names は online_users から生成
@@ -65,6 +76,8 @@ namespace EA_CostManager.ViewModels
         public ICommand navigate_to_cost_command { get; }
         public ICommand navigate_to_import_command { get; }
         public ICommand navigate_to_settings_command { get; }
+        // ▼ 追加 [Sprint 7B]：工数表ページへのナビゲーション
+        public ICommand navigate_to_workload_command { get; }
 
         public main_view_model()
         {
@@ -72,6 +85,7 @@ namespace EA_CostManager.ViewModels
             {
                 current_page = "dashboard";
                 is_cost_expanded = false;
+                is_workload_expanded = false; // ▼ 追加 [Sprint 9A]
             });
             navigate_to_cost_command = new RelayCommand(() =>
             {
@@ -85,16 +99,35 @@ namespace EA_CostManager.ViewModels
                     current_page = "cost";
                     is_cost_expanded = true;
                 }
+                is_workload_expanded = false; // ▼ 追加 [Sprint 9A]：工数表ツリーは閉じる
             });
             navigate_to_import_command = new RelayCommand(() =>
             {
                 current_page = "import";
                 is_cost_expanded = false;
+                is_workload_expanded = false; // ▼ 追加 [Sprint 9A]
             });
             navigate_to_settings_command = new RelayCommand(() =>
             {
                 current_page = "settings";
                 is_cost_expanded = false;
+                is_workload_expanded = false; // ▼ 追加 [Sprint 9A]
+            });
+            // ▼ 修正 [Sprint 9A]：工数表ページへ切替＋大区分ツリーを開く
+            //   既に工数表を表示中に再クリックした場合はツリーをトグルする
+            //   （原価集計ボタンと同じ操作感）。
+            navigate_to_workload_command = new RelayCommand(() =>
+            {
+                if (current_page == "workload")
+                {
+                    is_workload_expanded = !is_workload_expanded;
+                }
+                else
+                {
+                    current_page = "workload";
+                    is_workload_expanded = true;
+                }
+                is_cost_expanded = false; // 原価集計ツリーは閉じる
             });
 
             // ▼▼▼ 追加：ハートビートタイマー初期化（2分間隔）▼▼▼
@@ -281,6 +314,7 @@ namespace EA_CostManager.ViewModels
                     OnPropertyChanged(nameof(is_cost));
                     OnPropertyChanged(nameof(is_import));
                     OnPropertyChanged(nameof(is_settings));
+                    OnPropertyChanged(nameof(is_workload)); // ▼ 追加 [Sprint 7B]
 
                     // ▼▼▼ [現場タブ追跡] 原価集計以外に移動したらcurrent_tabをクリアして即時更新 ▼▼▼
                     if (value != "cost")
@@ -300,6 +334,8 @@ namespace EA_CostManager.ViewModels
         public bool is_cost => current_page == "cost";
         public bool is_import => current_page == "import";
         public bool is_settings => current_page == "settings";
+        // ▼ 追加 [Sprint 7B]：工数表ページ表示中か（WorkloadPage の Visibility 用）
+        public bool is_workload => current_page == "workload";
 
         // ▼▼▼ 追加（v0.9.6）：IDisposable 実装 ▼▼▼
         /// <summary>
@@ -320,4 +356,4 @@ namespace EA_CostManager.ViewModels
             try { _cts.Dispose(); } catch { /* ignore */ }
         }
     }
-}
+} 

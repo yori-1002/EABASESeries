@@ -95,6 +95,50 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
+                        <!-- ▼▼▼ 追加 [Sprint 7B]：工数表ボタン ▼▼▼ -->
+                        <Button Content="  工数表"
+                                Command="{Binding navigate_to_workload_command}"
+                                Style="{StaticResource style_sidebar_button}" />
+
+                        <!-- ▼▼▼ 追加 [Sprint 9A]：工数表の大区分ツリー ▼▼▼
+                             is_workload_expanded が true のときのみ表示する。
+                             原価集計のツリーと同じ見た目だが、参照先は workload_page.vm であり
+                             選択状態（selected_group）は原価集計と独立している。
+                             ItemsSource は MainWindow.xaml.cs の Loaded で
+                             workload_page.vm.group_items にバインドする
+                             （WorkloadPage 側のVMを参照するため XAML だけでは解決できない）。 -->
+                        <ItemsControl x:Name="workload_group_list"
+                                      Visibility="{Binding is_workload_expanded, Converter={StaticResource bool_to_vis}, FallbackValue=Collapsed}"
+                                      Margin="0,0,0,4">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Padding="28,7,12,7"
+                                            Cursor="Hand"
+                                            BorderThickness="0"
+                                            HorizontalContentAlignment="Left"
+                                            Click="workload_group_item_Click"
+                                            Tag="{Binding}">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Setter Property="Foreground" Value="White"/>
+                                                <Setter Property="FontSize"   Value="12"/>
+                                                <Style.Triggers>
+                                                    <!-- 選択中グループをハイライト（原価集計と同一） -->
+                                                    <DataTrigger Binding="{Binding is_selected}" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource brush_nav_selected}"/>
+                                                        <Setter Property="FontWeight" Value="Bold"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock Text="{Binding display_label}"
+                                                   TextWrapping="Wrap" FontSize="12"/>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
                         <TextBlock Text="データ" FontSize="10" Foreground="#C8D8E8"
                                    Margin="20,20,0,6" FontWeight="SemiBold" />
 
@@ -241,6 +285,15 @@
                 Visibility="{Binding DataContext.is_settings,
                              RelativeSource={RelativeSource AncestorType=Window},
                              Converter={StaticResource bool_to_vis}}" Loaded="SettingsPage_Loaded"/>
+
+                <!-- ▼▼▼ 追加 [Sprint 7B]：工数表ページ ▼▼▼ -->
+                <!-- FallbackValue=Collapsed：is_workload 未実装状態でバインドに失敗しても
+                     既定表示（Visible）で他ページを覆わないようにする安全策 -->
+                <views:WorkloadPage x:Name="workload_page"
+                Visibility="{Binding DataContext.is_workload,
+                             RelativeSource={RelativeSource AncestorType=Window},
+                             Converter={StaticResource bool_to_vis},
+                             FallbackValue=Collapsed}"/>
             </Grid>
         </Grid>
     </Grid>

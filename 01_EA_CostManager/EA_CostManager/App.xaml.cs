@@ -116,6 +116,16 @@ namespace EA_CostManager
                 }
                 write_log("CategoryGroupマイグレーション完了（ローカルDB）");
 
+                // ▼▼▼ 追加 [Sprint 7B] workload_*（工数表）テーブルマイグレーション ▼▼▼
+                // 工数表機能（業務区分・キーワード・サブ分類）用の5テーブルを作成。
+                // CREATE TABLE IF NOT EXISTS のため冪等（既存テーブルへの変更なし）
+                write_log("Workloadマイグレーション開始（ローカルDB）");
+                using (var conn = database_manager.create_connection())
+                {
+                    WorkloadMigration.migrate(conn);
+                }
+                write_log("Workloadマイグレーション完了（ローカルDB）");
+
                 // ▼ 追加（v1.0.2）：スプラッシュステータス更新
                 _splash.update_status("NAS接続を確認中...");
 
@@ -293,6 +303,24 @@ namespace EA_CostManager
                         catch (Exception ex_mig2)
                         {
                             write_log($"CategoryGroupマイグレーションスキップ（NAS DB）: {ex_mig2.Message}");
+                        }
+
+                        // ▼▼▼ 追加 [Sprint 7B] NAS DBにもworkload_*（工数表）テーブルを作成 ▼▼▼
+                        // NAS切替後に再度マイグレーションしてNAS DB側にもテーブルを作成する
+                        // （分類設定は全PCで共有するためNAS DBに保存される）
+                        // 既存Migrationと同じく短タイムアウト接続＋失敗時スキップ方式
+                        try
+                        {
+                            write_log("Workloadマイグレーション開始（NAS DB）");
+                            using (var conn_nas_wl = create_startup_connection())
+                            {
+                                WorkloadMigration.migrate(conn_nas_wl);
+                            }
+                            write_log("Workloadマイグレーション完了（NAS DB）");
+                        }
+                        catch (Exception ex_mig_wl)
+                        {
+                            write_log($"Workloadマイグレーションスキップ（NAS DB）: {ex_mig_wl.Message}");
                         }
 
                         // ▼▼▼ [現場タブ追跡] NAS DBに current_tab カラムを追加 ▼▼▼

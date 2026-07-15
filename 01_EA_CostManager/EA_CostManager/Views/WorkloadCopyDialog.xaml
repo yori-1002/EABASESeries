@@ -1,0 +1,80 @@
+﻿<Window x:Class="EA_CostManager.Views.WorkloadCopyDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="他案件から区分をコピー"
+        Width="720" Height="560"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        Background="#F5F8FB">
+
+    <!-- ▼ 追加 [Sprint 7C-1]：他案件の業務区分を取り込むダイアログ
+         案件ごとに業務区分は異なるが、似た工事であれば流用できるため、
+         コピー元の案件を選び、取り込みたい区分をチェックボックスで選択する。
+         取り込んだ区分は「新規」として編集中リストに追加され、
+         分類設定ダイアログで「保存」を押した時点でDBへ反映される。 -->
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Text="コピー元の案件を選び、取り込む区分にチェックを入れてください。"
+                   FontSize="13" Foreground="#333" Margin="0,0,0,10" />
+
+        <!-- コピー元の案件 -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Text="コピー元：" FontSize="12" VerticalAlignment="Center" />
+            <ComboBox Width="420" Height="30" FontSize="12"
+                      VerticalContentAlignment="Center"
+                      ItemsSource="{Binding source_projects}"
+                      SelectedItem="{Binding selected_source}"
+                      DisplayMemberPath="display_name" />
+        </StackPanel>
+
+        <!-- 区分の一覧（チェックボックスで選択） -->
+        <Border Grid.Row="2" Background="White" CornerRadius="6"
+                BorderBrush="#DDE6EF" BorderThickness="1" Padding="8">
+            <DataGrid ItemsSource="{Binding source_categories}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="Horizontal"
+                      HorizontalGridLinesBrush="#EEF2F6"
+                      RowHeaderWidth="0"
+                      FontSize="12">
+                <DataGrid.Columns>
+                    <!-- チェックボックス列：1クリックで切り替わるよう CheckBoxColumn を使う -->
+                    <DataGridCheckBoxColumn Header="取込" Binding="{Binding is_checked, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="50" />
+                    <DataGridTextColumn Header="区分名" Binding="{Binding name}" Width="220" IsReadOnly="True" />
+                    <DataGridTextColumn Header="キーワード" Binding="{Binding keywords_display}" Width="*" IsReadOnly="True" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <TextBlock Grid.Row="3" Text="{Binding status_message}"
+                   FontSize="12" Foreground="#0F5FA8" Margin="2,10,0,0" TextWrapping="Wrap" />
+
+        <DockPanel Grid.Row="4" Margin="0,12,0,0">
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                <Button Content="すべて選択" Command="{Binding check_all_command}"
+                        Padding="12,6" FontSize="12" Margin="0,0,6,0" />
+                <Button Content="すべて解除" Command="{Binding uncheck_all_command}"
+                        Padding="12,6" FontSize="12" />
+            </StackPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="キャンセル" IsCancel="True"
+                        Padding="20,6" FontSize="12" Margin="0,0,8,0" />
+                <Button Content="取り込む" Click="import_click"
+                        Padding="24,6" FontSize="12" FontWeight="Bold"
+                        Background="#0F5FA8" Foreground="White" BorderThickness="0" />
+            </StackPanel>
+            <TextBlock />
+        </DockPanel>
+    </Grid>
+</Window>
