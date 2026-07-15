@@ -104,6 +104,12 @@ namespace EA_CostManager.Services
                 WHERE s.project_id = @p AND s.is_active = 1
                 ORDER BY k.priority, k.id", new { p = project_id })).ToList();
 
+            // ▼ 追加 [Sprint 7D]：サブ分類の適用先（どの区分タブに出すか）
+            result.subgroup_links = (await conn.QueryAsync<workload_subgroup_link>(@"
+                SELECT l.* FROM workload_subgroup_links l
+                JOIN workload_subgroups s ON s.id = l.subgroup_id
+                WHERE s.project_id = @p AND s.is_active = 1", new { p = project_id })).ToList();
+
             var mode_rows = (await conn.QueryAsync<workload_subgroup_mode>(
                 "SELECT * FROM workload_subgroup_modes WHERE project_id = @p",
                 new { p = project_id })).ToList();
@@ -133,20 +139,13 @@ namespace EA_CostManager.Services
                                  .Where(k => k.Length > 0)
                                  .ToList());
 
-            // 区分ID → その区分で使用するサブ分類セット（モード解決済み・sort_order順）
-            var subgroup_set_by_category = new Dictionary<int, List<workload_subgroup>>();
-            foreach (var c in result.categories)
-            {
-                string mode = result.mode_by_category[c.id];
-                List<workload_subgroup> set;
-                if (mode == workload_subgroup_mode.MODE_NONE)
-                    set = new List<workload_subgroup>();                                   // サブ分類なし
-                else if (mode == workload_subgroup_mode.MODE_CUSTOM)
-                    set = result.subgroups.Where(s => s.category_id == c.id).ToList();     // 区分個別セット
-                else
-                    set = result.subgroups.Where(s => s.category_id == null).ToList();     // 案件共通セット
-                subgroup_set_by_category[c.id] = set;
-            }
+            // 区分ID → その区分で使用するサブ分類セット（適用先リンク解決済み・sort_order順）
+            // ▼ 修正 [Sprint 7D]：解決ルールを workload_result.get_subgroup_set に一本化した。
+            //   以前はここと画面側で同じ判定を二重に書いていたため、
+            //   振り分け結果と表示行がずれる余地があった。
+            var subgroup_set_by_category = result.categories.ToDictionary(
+                c => c.id,
+                c => result.get_subgroup_set(c.id));
 
             // ---- 5. 集計用の設定・マスタ（load_task_mode_async と同一） ----
             var setting_rows = (await conn.QueryAsync<(string key, string value)>(

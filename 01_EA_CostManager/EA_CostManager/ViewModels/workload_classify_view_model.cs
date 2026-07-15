@@ -94,8 +94,24 @@ namespace EA_CostManager.ViewModels
 
         public int id { get; set; }
 
-        /// <summary>NULL＝案件共通セット／値あり＝その区分専用セット</summary>
-        public int? category_id { get; set; }
+        /// <summary>
+        /// ▼ 追加 [Sprint 7D]：このサブ分類を表示する区分（適用先）。
+        /// 以前は「案件共通（＝全区分に出る）」か「1区分専用」の二択しかなく、
+        /// 共通で1件追加すると全ての区分タブに出てしまっていた。
+        /// 区分ごとにチェックで選べるよう、適用先を集合として持つ。
+        ///
+        /// 区分は保存前にも追加・削除されうる（新規区分は id=0 でIDが未確定）ため、
+        /// IDではなく編集中のオブジェクトそのものを保持する。
+        /// 保存時に確定したIDで workload_subgroup_links へ書き込む。
+        /// </summary>
+        public HashSet<edit_category> linked_categories { get; } = new();
+
+        /// <summary>一覧に出す適用先の要約（「2 区分」など）</summary>
+        public string applied_text =>
+            linked_categories.Count == 0 ? "未設定" : $"{linked_categories.Count} 区分";
+
+        /// <summary>適用先を変更したときに一覧の表示を更新させる</summary>
+        public void notify_links_changed() => notify(nameof(applied_text));
 
         private string _name = "";
         public string name
@@ -157,6 +173,46 @@ namespace EA_CostManager.ViewModels
         }
     }
 
+    /// <summary>
+    /// ▼ 追加 [Sprint 7D]：「適用する区分タブ」チェックボックス1件。
+    /// 選択中のサブ分類 × 区分1件の組み合わせを表し、
+    /// チェックの ON/OFF がそのまま edit_subgroup.linked_categories の出し入れになる。
+    /// </summary>
+    public class edit_subgroup_target : INotifyPropertyChanged
+    {
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void notify([CallerMemberName] string? n = null) =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+
+        private readonly edit_subgroup _subgroup;
+
+        /// <summary>チェック対象の区分。表示名は category.name を直接バインドする
+        /// （区分名を変更すると、このチェック一覧の表示も追従する）</summary>
+        public edit_category category { get; }
+
+        public edit_subgroup_target(edit_subgroup subgroup, edit_category category)
+        {
+            _subgroup = subgroup;
+            this.category = category;
+        }
+
+        public bool is_checked
+        {
+            get => _subgroup.linked_categories.Contains(category);
+            set
+            {
+                if (value == is_checked) return;
+                if (value) _subgroup.linked_categories.Add(category);
+                else _subgroup.linked_categories.Remove(category);
+                notify();
+                _subgroup.notify_links_changed();
+            }
+        }
+
+        /// <summary>一括変更（全選択／全解除）のあとに表示を更新させる</summary>
+        public void refresh() => notify(nameof(is_checked));
+    }
+
     // ================================================================
     // ▼ 追加 [Sprint 7C-1]：分類設定ダイアログのViewModel
     // ================================================================
@@ -192,11 +248,7 @@ namespace EA_CostManager.ViewModels
                 _selected_category = value;
                 OnPropertyChanged(nameof(selected_category));
                 OnPropertyChanged(nameof(has_selection));
-                OnPropertyChanged(nameof(is_mode_common));
-                OnPropertyChanged(nameof(is_mode_custom));
                 OnPropertyChanged(nameof(is_mode_none));
-                OnPropertyChanged(nameof(show_subgroups));
-                refresh_visible_subgroups(); // ▼ 修正 [7C-fix1]
             }
         }
 
@@ -213,7 +265,29 @@ namespace EA_CostManager.ViewModels
         public edit_subgroup? selected_subgroup
         {
             get => _selected_subgroup;
-            set { _selected_subgroup = value; OnPropertyChanged(nameof(selected_subgroup)); }
+            set
+            {
+                _selected_subgroup = value;
+                OnPropertyChanged(nameof(selected_subgroup));
+                OnPropertyChanged(nameof(has_subgroup_selection));
+                rebuild_subgroup_targets();   // ▼ 追加 [Sprint 7D]
+            }
+        }
+
+        public bool has_subgroup_selection => _selected_subgroup != null;
+
+        /// <summary>
+        /// ▼ 追加 [Sprint 7D]：選択中のサブ分類を「どの区分タブに出すか」のチェック一覧。
+        /// 区分の追加・削除・選択の変更に追従させるため、その都度作り直す。
+        /// </summary>
+        public ObservableCollection<edit_subgroup_target> subgroup_targets { get; } = new();
+
+        private void rebuild_subgroup_targets()
+        {
+            subgroup_targets.Clear();
+            if (_selected_subgroup == null) return;
+            foreach (var c in categories)
+                subgroup_targets.Add(new edit_subgroup_target(_selected_subgroup, c));
         }
 
         // ---- 新規キーワードの入力欄 ----
@@ -260,11 +334,7 @@ namespace EA_CostManager.ViewModels
             {
                 if (_selected_category == null) return;
                 _mode_by_category[mode_key(_selected_category)] = value;
-                OnPropertyChanged(nameof(is_mode_common));
-                OnPropertyChanged(nameof(is_mode_custom));
                 OnPropertyChanged(nameof(is_mode_none));
-                OnPropertyChanged(nameof(show_subgroups));
-                refresh_visible_subgroups(); // ▼ 修正 [7C-fix1]
             }
         }
 
@@ -281,61 +351,18 @@ namespace EA_CostManager.ViewModels
             return t;
         }
 
-        public bool is_mode_common
-        {
-            get => current_mode == workload_subgroup_mode.MODE_COMMON;
-            set { if (value) current_mode = workload_subgroup_mode.MODE_COMMON; }
-        }
-        public bool is_mode_custom
-        {
-            get => current_mode == workload_subgroup_mode.MODE_CUSTOM;
-            set { if (value) current_mode = workload_subgroup_mode.MODE_CUSTOM; }
-        }
+        /// <summary>
+        /// ▼ 修正 [Sprint 7D]：この区分をサブ分類で分けないか。
+        /// 以前は「共通／専用／使わない」の3モードだったが、適用先を区分ごとに
+        /// チェックで選べるようになり共通・専用の区別が不要になったため、
+        /// 「分けない（none）」の ON/OFF だけを残した。
+        /// </summary>
         public bool is_mode_none
         {
             get => current_mode == workload_subgroup_mode.MODE_NONE;
-            set { if (value) current_mode = workload_subgroup_mode.MODE_NONE; }
-        }
-
-        /// <summary>サブ分類の一覧を表示するか（「使わない」モードでは隠す）</summary>
-        public bool show_subgroups =>
-            has_selection && current_mode != workload_subgroup_mode.MODE_NONE;
-
-        /// <summary>
-        /// ▼ 修正 [7C-fix1]：現在のモードに応じて表示するサブ分類。
-        ///   以前は LINQ（IEnumerable）を返していたが、LINQ の結果は読み取り専用のため
-        ///   DataGrid でセルを編集すると「EditItem は、このビューに対して許可されていません」
-        ///   というエラーになった。編集可能にするため ObservableCollection を保持し、
-        ///   区分の選択やモードが変わるたびに refresh_visible_subgroups() で中身を詰め直す。
-        ///   common＝案件共通セット（category_id が null）／custom＝この区分専用セット。
-        /// </summary>
-        public ObservableCollection<edit_subgroup> visible_subgroups { get; } = new();
-
-        /// <summary>
-        /// 表示用のサブ分類コレクションを現在の選択・モードに合わせて作り直す。
-        ///  ※ 実体（subgroups）に入っているオブジェクトをそのまま参照として詰めるため、
-        ///    ここで編集した内容は subgroups 側にも反映される（保存時にDBへ書き込まれる）。
-        /// </summary>
-        private void refresh_visible_subgroups()
-        {
-            visible_subgroups.Clear();
-            if (_selected_category == null) return;
-            if (current_mode == workload_subgroup_mode.MODE_NONE) return;
-
-            IEnumerable<edit_subgroup> src;
-            if (current_mode == workload_subgroup_mode.MODE_CUSTOM)
-            {
-                // 区分専用セット。未保存の区分（id=0）は専用セットを持てない
-                src = _selected_category.id == 0
-                    ? Enumerable.Empty<edit_subgroup>()
-                    : subgroups.Where(s => s.category_id == _selected_category.id);
-            }
-            else
-            {
-                // 案件共通セット
-                src = subgroups.Where(s => s.category_id == null);
-            }
-            foreach (var s in src) visible_subgroups.Add(s);
+            set => current_mode = value
+                ? workload_subgroup_mode.MODE_NONE
+                : workload_subgroup_mode.MODE_COMMON;
         }
 
         // ---- コマンド ----
@@ -348,6 +375,9 @@ namespace EA_CostManager.ViewModels
         public ICommand add_subgroup_command { get; }
         public ICommand delete_subgroup_command { get; }
         public ICommand copy_from_project_command { get; }
+        // ▼ 追加 [Sprint 7D]：適用先チェックの一括操作
+        public ICommand select_all_targets_command { get; }
+        public ICommand clear_all_targets_command { get; }
 
         public workload_classify_view_model(int project_id, string project_title)
         {
@@ -363,6 +393,18 @@ namespace EA_CostManager.ViewModels
             add_subgroup_command = new RelayCommand(add_subgroup);
             delete_subgroup_command = new RelayCommand(delete_subgroup);
             copy_from_project_command = new RelayCommand(async () => await copy_from_project_async());
+            select_all_targets_command = new RelayCommand(() => set_all_targets(true));
+            clear_all_targets_command = new RelayCommand(() => set_all_targets(false));
+        }
+
+        /// <summary>▼ 追加 [Sprint 7D]：選択中サブ分類の適用先をまとめて ON/OFF する</summary>
+        private void set_all_targets(bool value)
+        {
+            foreach (var t in subgroup_targets)
+            {
+                t.is_checked = value;
+                t.refresh();
+            }
         }
 
         // ============================================================
@@ -425,6 +467,14 @@ namespace EA_CostManager.ViewModels
                     WHERE s.project_id = @p AND s.is_active = 1
                     ORDER BY k.priority, k.id", new { p = _project_id })).ToList();
 
+                // ▼ 追加 [Sprint 7D]：適用先リンク（サブ分類ID × 区分ID）
+                var links = (await conn.QueryAsync<workload_subgroup_link>(@"
+                    SELECT l.* FROM workload_subgroup_links l
+                    JOIN workload_subgroups s ON s.id = l.subgroup_id
+                    WHERE s.project_id = @p AND s.is_active = 1", new { p = _project_id })).ToList();
+
+                var category_by_id = categories.Where(c => c.id != 0).ToDictionary(c => c.id);
+
                 subgroups.Clear();
                 foreach (var s in subs)
                 {
@@ -433,13 +483,17 @@ namespace EA_CostManager.ViewModels
                     var es = new edit_subgroup
                     {
                         id = s.id,
-                        category_id = s.category_id,
                         name = s.name,
                         // サブ分類名と同じキーワード1件だけなら、名前で判定しているとみなして空欄にする
                         keywords_text = (words.Count == 1 &&
                                          string.Equals(words[0], s.name, StringComparison.OrdinalIgnoreCase))
                                         ? "" : string.Join(", ", words),
                     };
+                    // ▼ 追加 [Sprint 7D]：このサブ分類を出す区分（適用先）を復元する
+                    foreach (var l in links.Where(l => l.subgroup_id == s.id))
+                        if (category_by_id.TryGetValue(l.category_id, out var cat))
+                            es.linked_categories.Add(cat);
+
                     // ▼ 追加 [7C-fix4]：編集のたびに該当件数を再計算させる
                     es.changed = () => recalc_subgroup_hits(es);
                     subgroups.Add(es);
@@ -584,6 +638,7 @@ namespace EA_CostManager.ViewModels
             categories.Add(ec);
             selected_category = ec;
             recalc_hits(ec);
+            rebuild_subgroup_targets();   // ▼ 追加 [Sprint 7D]：適用先チェック一覧に新区分を出す
             update_status();
         }
 
@@ -596,19 +651,23 @@ namespace EA_CostManager.ViewModels
                 "確認", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (confirm != MessageBoxResult.Yes) return;
 
-            // DBに存在する区分は保存時にDELETEする（キーワード・専用サブ分類も一緒に消す）
+            // DBに存在する区分は保存時にDELETEする（キーワード・適用先リンクも一緒に消す）
             if (_selected_category.id != 0)
                 _deleted_category_ids.Add(_selected_category.id);
 
-            // この区分専用のサブ分類も削除対象に含める
-            foreach (var s in subgroups.Where(s => s.category_id == _selected_category.id).ToList())
+            // ▼ 修正 [Sprint 7D]：この区分を適用先から外すだけにする。
+            //   サブ分類は案件単位の資産で、他の区分にも適用されている場合があるため、
+            //   区分を消したことに巻き込んで削除してはいけない
+            //  （旧実装は category_id が一致するサブ分類ごと削除していた）。
+            foreach (var s in subgroups)
             {
-                if (s.id != 0) _deleted_subgroup_ids.Add(s.id);
-                subgroups.Remove(s);
+                if (s.linked_categories.Remove(_selected_category))
+                    s.notify_links_changed();
             }
 
             categories.Remove(_selected_category);
             selected_category = categories.FirstOrDefault();
+            rebuild_subgroup_targets();   // ▼ 追加 [Sprint 7D]：チェック一覧から消した区分を除く
             update_status();
         }
 
@@ -664,29 +723,24 @@ namespace EA_CostManager.ViewModels
         // ============================================================
         // サブ分類の操作
         // ============================================================
+        /// <summary>
+        /// ▼ 修正 [Sprint 7D]：サブ分類を追加する。
+        /// 適用先は「左で選択中の区分」1つだけを初期値にする。
+        /// 旧実装は common モードで案件共通（＝全区分に表示）として追加していたため、
+        /// 1件追加すると全ての区分タブに同じサブ分類が出てしまっていた。
+        /// 他の区分にも出したい場合は、右の「適用する区分タブ」でチェックを足す。
+        /// </summary>
         private void add_subgroup()
         {
-            if (_selected_category == null) return;
-            // custom モードのときはこの区分専用、common のときは案件共通として追加する
-            int? cat_id = current_mode == workload_subgroup_mode.MODE_CUSTOM
-                ? _selected_category.id : (int?)null;
-
-            if (current_mode == workload_subgroup_mode.MODE_CUSTOM && _selected_category.id == 0)
-            {
-                MessageBox.Show(
-                    "この区分はまだ保存されていないため、区分専用のサブ分類を追加できません。\n" +
-                    "先に「保存」を実行してから、専用サブ分類を追加してください。",
-                    "確認", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
             // ▼ 修正 [7C-fix4]：新規サブ分類にも該当件数の再計算を配線する
-            var ns = new edit_subgroup { id = 0, category_id = cat_id, name = "新しいサブ分類" };
+            var ns = new edit_subgroup { id = 0, name = "新しいサブ分類" };
+            if (_selected_category != null)
+                ns.linked_categories.Add(_selected_category);
+
             ns.changed = () => recalc_subgroup_hits(ns);
             subgroups.Add(ns);
             recalc_subgroup_hits(ns);
-            refresh_visible_subgroups(); // ▼ 修正 [7C-fix1]
-            selected_subgroup = ns;      // 追加した行を選択状態にする
+            selected_subgroup = ns;      // 追加した行を選択状態にする（適用先チェックも切り替わる）
         }
 
         private void delete_subgroup()
@@ -695,7 +749,6 @@ namespace EA_CostManager.ViewModels
             if (_selected_subgroup.id != 0) _deleted_subgroup_ids.Add(_selected_subgroup.id);
             subgroups.Remove(_selected_subgroup);
             selected_subgroup = null;
-            refresh_visible_subgroups(); // ▼ 修正 [7C-fix1]
         }
 
         // ============================================================
@@ -726,6 +779,7 @@ namespace EA_CostManager.ViewModels
                 categories.Add(ec);
                 recalc_hits(ec);
             }
+            rebuild_subgroup_targets();   // ▼ 追加 [Sprint 7D]：取り込んだ区分をチェック一覧にも出す
             update_status();
             status_message = $"{dlg.selected_categories.Count} 件の区分を取り込みました。「保存」で確定されます。";
         }
@@ -754,24 +808,40 @@ namespace EA_CostManager.ViewModels
                 return false;
             }
 
+            // ▼ 追加 [Sprint 7D]：適用先が未設定のサブ分類は、どの区分タブにも表示されない。
+            //   設定の途中である可能性もあるため、保存は止めずに確認だけ行う。
+            var orphans = subgroups
+                .Where(s => !string.IsNullOrWhiteSpace(s.name) && s.linked_categories.Count == 0)
+                .Select(s => s.name.Trim())
+                .ToList();
+            if (orphans.Count > 0)
+            {
+                var confirm = MessageBox.Show(
+                    $"適用する区分タブが選ばれていないサブ分類が {orphans.Count} 件ございます。\n" +
+                    $"（{string.Join("、", orphans.Take(5))}{(orphans.Count > 5 ? " ほか" : "")}）\n\n" +
+                    "このままですと、どの区分タブにも表示されません。\n保存してよろしいでしょうか？",
+                    "確認", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (confirm != MessageBoxResult.Yes) return false;
+            }
+
             try
             {
                 using var conn = database_manager.create_connection();
                 using var tx = conn.BeginTransaction();
 
                 // ---- 削除 ----
-                // 区分を削除するときは、ぶら下がるキーワード・専用サブ分類・モードも消す
+                // 区分を削除するときは、ぶら下がるキーワード・適用先リンク・モードも消す。
+                // ▼ 修正 [Sprint 7D]：サブ分類そのものは消さない。
+                //   サブ分類は案件単位の資産で、他の区分にも適用されている場合があるため、
+                //   ここで消すと無関係な区分タブから分類が失われてしまう
+                //  （旧実装は category_id が一致するサブ分類を削除していた）。
                 foreach (int cid in _deleted_category_ids)
                 {
                     await conn.ExecuteAsync(
                         "DELETE FROM workload_category_keywords WHERE category_id = @id",
                         new { id = cid }, tx);
-                    await conn.ExecuteAsync(@"
-                        DELETE FROM workload_subgroup_keywords
-                         WHERE subgroup_id IN (SELECT id FROM workload_subgroups WHERE category_id = @id)",
-                        new { id = cid }, tx);
                     await conn.ExecuteAsync(
-                        "DELETE FROM workload_subgroups WHERE category_id = @id",
+                        "DELETE FROM workload_subgroup_links WHERE category_id = @id",
                         new { id = cid }, tx);
                     await conn.ExecuteAsync(
                         "DELETE FROM workload_subgroup_modes WHERE category_id = @id",
@@ -788,6 +858,9 @@ namespace EA_CostManager.ViewModels
                 {
                     await conn.ExecuteAsync(
                         "DELETE FROM workload_subgroup_keywords WHERE subgroup_id = @id",
+                        new { id = sid }, tx);
+                    await conn.ExecuteAsync(
+                        "DELETE FROM workload_subgroup_links WHERE subgroup_id = @id",
                         new { id = sid }, tx);
                     await conn.ExecuteAsync(
                         "DELETE FROM workload_subgroups WHERE id = @id",
@@ -852,11 +925,13 @@ namespace EA_CostManager.ViewModels
 
                     if (s.id == 0)
                     {
+                        // ▼ 修正 [Sprint 7D]：category_id は旧構造の名残のため常に NULL。
+                        //   どの区分に出すかは workload_subgroup_links で表す
                         s.id = (int)await conn.ExecuteScalarAsync<long>(@"
                             INSERT INTO workload_subgroups (project_id, category_id, name, sort_order)
-                            VALUES (@p, @c, @n, @s);
+                            VALUES (@p, NULL, @n, @s);
                             SELECT last_insert_rowid();",
-                            new { p = _project_id, c = s.category_id, n = s.name.Trim(), s = ssort }, tx);
+                            new { p = _project_id, n = s.name.Trim(), s = ssort }, tx);
                     }
                     else
                     {
@@ -882,6 +957,23 @@ namespace EA_CostManager.ViewModels
                             VALUES (@s, @k, @pr)",
                             new { s = s.id, k = w, pr = pri }, tx);
                         pri += 10;
+                    }
+
+                    // ---- 適用先リンクも入れ直す ----
+                    // ▼ 追加 [Sprint 7D]：キーワードと同じく差分管理をせず、
+                    //   毎回消してから画面の状態を書き込む（画面と必ず一致させる）。
+                    //   区分は上のループで採番済みのため、この時点で id が確定している。
+                    await conn.ExecuteAsync(
+                        "DELETE FROM workload_subgroup_links WHERE subgroup_id = @id",
+                        new { id = s.id }, tx);
+
+                    foreach (var cat in s.linked_categories)
+                    {
+                        if (cat.id == 0) continue;   // 削除された区分（採番されなかった）は除く
+                        await conn.ExecuteAsync(@"
+                            INSERT OR IGNORE INTO workload_subgroup_links (subgroup_id, category_id)
+                            VALUES (@s, @c)",
+                            new { s = s.id, c = cat.id }, tx);
                     }
                 }
 

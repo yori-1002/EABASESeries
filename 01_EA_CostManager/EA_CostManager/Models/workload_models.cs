@@ -39,13 +39,19 @@ namespace EA_CostManager.Models
 
     /// <summary>
     /// ▼ 追加 [Sprint 7A]：サブ分類（橋名など。区分の中をさらに分ける単位）
-    /// workload_subgroups テーブルの1行に対応
+    /// workload_subgroups テーブルの1行に対応。
+    /// ▼ 修正 [Sprint 7D]：サブ分類は案件単位で管理し、どの区分タブに出すかは
+    /// workload_subgroup_links（適用先）で決まる。
     /// </summary>
     public class workload_subgroup
     {
         public int id { get; set; }
         public int project_id { get; set; }
-        /// <summary>NULL=案件共通セット／値あり=その区分専用セット（mode=custom用）</summary>
+        /// <summary>
+        /// ▼ 廃止 [Sprint 7D]：旧構造の名残（NULL=案件共通／値あり=区分専用）。
+        /// 適用先は workload_subgroup_links で表すため、現行コードは参照しない。
+        /// 旧データ保全のため列とプロパティのみ残している（新規行は NULL）。
+        /// </summary>
         public int? category_id { get; set; }
         public string name { get; set; } = "";
         public int sort_order { get; set; }
@@ -71,15 +77,33 @@ namespace EA_CostManager.Models
     }
 
     /// <summary>
+    /// ▼ 追加 [Sprint 7D]：サブ分類の適用先（サブ分類 × 業務区分の多対多）
+    /// workload_subgroup_links テーブルの1行に対応。
+    /// この行があるサブ分類だけが、その区分タブに表示される。
+    /// </summary>
+    public class workload_subgroup_link
+    {
+        public int id { get; set; }
+        public int subgroup_id { get; set; }
+        public int category_id { get; set; }
+        public string created_at { get; set; } = "";
+        public string updated_by { get; set; } = "";
+    }
+
+    /// <summary>
     /// ▼ 追加 [Sprint 7A]：区分ごとのサブ分類モード
     /// workload_subgroup_modes テーブルの1行に対応。
     /// (project_id, category_id) の行が存在しない区分は MODE_COMMON として扱う
     /// </summary>
     public class workload_subgroup_mode
     {
-        /// <summary>案件共通のサブ分類セットを使用（既定）</summary>
+        /// <summary>サブ分類で分ける（既定）。実際に出るサブ分類は適用先リンクで決まる</summary>
         public const string MODE_COMMON = "common";
-        /// <summary>この区分専用のサブ分類セットを使用（共通セットは無視）</summary>
+        /// <summary>
+        /// ▼ 廃止 [Sprint 7D]：旧「この区分専用セット」モード。
+        /// 適用先リンクの導入で共通／専用の区別が不要になったため、書き込みは行わない。
+        /// 旧データの読み込み互換のため定数のみ残す（MODE_NONE 以外＝分ける、として扱う）。
+        /// </summary>
         public const string MODE_CUSTOM = "custom";
         /// <summary>サブ分類で分けない（区分合計のみ表示）</summary>
         public const string MODE_NONE = "none";
@@ -139,29 +163,36 @@ namespace EA_CostManager.Models
         public bool is_task_mode { get; set; }
         /// <summary>業務区分（sort_order順・有効のみ）</summary>
         public List<workload_category> categories { get; set; } = new();
-        /// <summary>サブ分類（共通・個別の両方を含む。有効のみ）</summary>
+        /// <summary>サブ分類（案件内の全件。有効のみ）</summary>
         public List<workload_subgroup> subgroups { get; set; } = new();
-        /// <summary>区分ID → サブ分類モード（common/custom/none）。行が無い区分は common</summary>
+        /// <summary>
+        /// ▼ 追加 [Sprint 7D]：サブ分類の適用先リンク（案件内の全件）。
+        /// get_subgroup_set はこれを引いて「その区分に出るサブ分類」を決める。
+        /// </summary>
+        public List<workload_subgroup_link> subgroup_links { get; set; } = new();
+        /// <summary>区分ID → サブ分類モード（common/none）。行が無い区分は common</summary>
         public Dictionary<int, string> mode_by_category { get; set; } = new();
         /// <summary>分類済みの全業務行（日付順）</summary>
         public List<workload_task_row> rows { get; set; } = new();
 
-        // ▼ 追加 [Sprint 7B]：区分が使用するサブ分類セットを解決して返す
-        //   モード common＝案件共通セット（category_id が NULL の行）
-        //         custom＝その区分専用セット（category_id 一致の行）
-        //         none  ＝空リスト（サブ分類で分けない）
+        // ▼ 追加 [Sprint 7B] ／ ▼ 修正 [Sprint 7D]：区分が使用するサブ分類セットを解決して返す
+        //   mode が none         ＝空リスト（サブ分類で分けない）
+        //   それ以外（common）   ＝この区分への適用先リンクを持つサブ分類だけ
         //   ※ WorkloadAggregationService の振り分け時と同一ルール。
         //     画面（ViewModel）が表の行を組み立てるときにも同じ解決を使うことで、
         //     振り分け結果と表示行のセットが必ず一致する。
+        //   ※ subgroups は sort_order 順で読み込むため、結果もその順序を保つ。
         public List<workload_subgroup> get_subgroup_set(int category_id)
         {
             string mode = mode_by_category.TryGetValue(category_id, out var m)
                 ? m : workload_subgroup_mode.MODE_COMMON;
             if (mode == workload_subgroup_mode.MODE_NONE)
                 return new List<workload_subgroup>();
-            if (mode == workload_subgroup_mode.MODE_CUSTOM)
-                return subgroups.Where(s => s.category_id == category_id).ToList();
-            return subgroups.Where(s => s.category_id == null).ToList();
+
+            var linked = subgroup_links.Where(l => l.category_id == category_id)
+                                       .Select(l => l.subgroup_id)
+                                       .ToHashSet();
+            return subgroups.Where(s => linked.Contains(s.id)).ToList();
         }
     }
 }

@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:EA_CostManager.Converters"
         Title="分類設定"
-        Width="1020" Height="700"
+        Width="1020" Height="820"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize"
         Background="#F5F8FB">
@@ -25,7 +25,9 @@
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <!-- 区分の設定（上）とサブ分類の設定（下）で高さを分け合う -->
+            <RowDefinition Height="*" MinHeight="240" />
+            <RowDefinition Height="*" MinHeight="200" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -34,7 +36,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,12">
             <TextBlock Text="{Binding project_title}"
                        FontSize="16" FontWeight="Bold" Foreground="#123" />
-            <TextBlock Text="区分名はそのままキーワードとして判定に使われます。表記ゆれや別の言い方を拾いたい場合は、追加キーワードを登録してください。"
+            <TextBlock Text="区分名はそのままキーワードとして判定に使われます。表記ゆれや別の言い方を拾いたい場合は、追加キーワードを登録してください。サブ分類は下の一覧で管理し、どの区分タブに出すかを「適用する区分タブ」のチェックで選べます。"
                        FontSize="11" Foreground="#666" TextWrapping="Wrap" Margin="0,4,0,0" />
         </StackPanel>
 
@@ -111,7 +113,7 @@
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <!-- 区分名 -->
@@ -185,94 +187,141 @@
                             Command="{Binding delete_keyword_command}"
                             HorizontalAlignment="Left" Padding="10,5" FontSize="12" Margin="0,6,0,12" />
 
-                    <!-- サブ分類 -->
-                    <Grid Grid.Row="5">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-
-                        <TextBlock Grid.Row="0" Text="サブ分類（区分の中をさらに分けます。橋名など）"
-                                   FontSize="12" FontWeight="Bold" Foreground="#333" Margin="0,0,0,4" />
-
-                        <!-- モード：共通セット／この区分専用／使わない -->
-                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,6">
-                            <RadioButton Content="案件共通のサブ分類を使う"
-                                         IsChecked="{Binding is_mode_common}"
-                                         IsEnabled="{Binding has_selection}"
-                                         FontSize="12" Margin="0,0,14,0" />
-                            <RadioButton Content="この区分専用にする"
-                                         IsChecked="{Binding is_mode_custom}"
-                                         IsEnabled="{Binding has_selection}"
-                                         FontSize="12" Margin="0,0,14,0" />
-                            <RadioButton Content="使わない"
-                                         IsChecked="{Binding is_mode_none}"
-                                         IsEnabled="{Binding has_selection}"
-                                         FontSize="12" />
-                        </StackPanel>
-
-                        <!-- ▼ 修正 [7C-fix4]：x:Name を付与し、保存時にセル編集を強制コミットする。
-                             WPFのDataGridはセルが編集モードのままだと、入力値が
-                             バインディングソース（edit_subgroup）へ書き戻されない。
-                             そのまま保存すると、画面に見えている文字が保存されないため、
-                             コードビハインドの save_click で CommitEdit() を呼ぶ。 -->
-                        <DataGrid Grid.Row="2"
-                                  x:Name="subgroup_grid"
-                                  ItemsSource="{Binding visible_subgroups}"
-                                  SelectedItem="{Binding selected_subgroup}"
-                                  Visibility="{Binding show_subgroups, Converter={StaticResource BoolToVis}}"
-                                  AutoGenerateColumns="False"
-                                  CanUserAddRows="False"
-                                  HeadersVisibility="Column"
-                                  GridLinesVisibility="Horizontal"
-                                  HorizontalGridLinesBrush="#EEF2F6"
-                                  RowHeaderWidth="0"
-                                  FontSize="12">
-                            <DataGrid.Columns>
-                                <!-- ▼ 修正 [7C-fix4]：UpdateSourceTrigger=PropertyChanged を指定する。
-                                     既定（LostFocus）だと、セルが編集中のまま「保存」を押した際に
-                                     入力値がモデルへ書き戻されず、保存されないため。
-                                     セルはダブルクリック（またはF2）で編集できる。 -->
-                                <DataGridTextColumn Header="サブ分類名"
-                                                    Binding="{Binding name, UpdateSourceTrigger=PropertyChanged}"
-                                                    Width="180" />
-                                <DataGridTextColumn Header="キーワード（カンマ区切り。空欄ならサブ分類名で判定）"
-                                                    Binding="{Binding keywords_text, UpdateSourceTrigger=PropertyChanged}"
-                                                    Width="*" />
-                                <!-- ▼ 追加 [7C-fix4]：該当件数（保存前に効果を確認できるようにする） -->
-                                <DataGridTextColumn Header="該当件数" Binding="{Binding hit_count}"
-                                                    Width="80" IsReadOnly="True">
-                                    <DataGridTextColumn.ElementStyle>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="TextAlignment" Value="Right" />
-                                            <Setter Property="Margin" Value="0,0,8,0" />
-                                        </Style>
-                                    </DataGridTextColumn.ElementStyle>
-                                </DataGridTextColumn>
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,6,0,0"
-                                    Visibility="{Binding show_subgroups, Converter={StaticResource BoolToVis}}">
-                            <Button Content="＋ サブ分類追加" Command="{Binding add_subgroup_command}"
-                                    Padding="10,5" FontSize="12" Margin="0,0,6,0" />
-                            <Button Content="削除" Command="{Binding delete_subgroup_command}"
-                                    Padding="10,5" FontSize="12" />
-                        </StackPanel>
-                    </Grid>
+                    <!-- ▼ 修正 [Sprint 7D]：サブ分類で分けるかどうかだけをこの区分の設定として持つ。
+                         どのサブ分類を出すかは下の「サブ分類」欄でチェックして決める。 -->
+                    <CheckBox Grid.Row="5" VerticalAlignment="Top"
+                              Content="この区分ではサブ分類で分けない（区分の合計だけを表示します）"
+                              IsChecked="{Binding is_mode_none}"
+                              IsEnabled="{Binding has_selection}"
+                              FontSize="12" Margin="0,4,0,0" />
                 </Grid>
             </Border>
         </Grid>
 
+        <!-- ═══ サブ分類（案件単位で管理し、適用先の区分をチェックで選ぶ） ═══
+             ▼ 追加 [Sprint 7D]
+             以前はサブ分類を選択中の区分の中に置き、「案件共通」で追加すると
+             全ての区分タブに出てしまっていた。サブ分類は案件単位の資産として一覧で扱い、
+             右のチェックで「どの区分タブに出すか」を1件ずつ指定する形に変更した。 -->
+        <Border Grid.Row="2" Background="White" CornerRadius="6"
+                BorderBrush="#DDE6EF" BorderThickness="1" Padding="12" Margin="0,12,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="300" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0"
+                           Text="サブ分類（区分の中をさらに分けます。橋名など）"
+                           FontSize="12" FontWeight="Bold" Foreground="#333" Margin="0,0,0,4" />
+                <TextBlock Grid.Row="0" Grid.Column="2"
+                           Text="適用する区分タブ"
+                           FontSize="12" FontWeight="Bold" Foreground="#333" Margin="0,0,0,4" />
+
+                <!-- ▼ 修正 [7C-fix4]：x:Name を付与し、保存時にセル編集を強制コミットする。
+                     WPFのDataGridはセルが編集モードのままだと、入力値が
+                     バインディングソース（edit_subgroup）へ書き戻されない。
+                     そのまま保存すると、画面に見えている文字が保存されないため、
+                     コードビハインドの save_click で CommitEdit() を呼ぶ。 -->
+                <Grid Grid.Row="1" Grid.Column="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <DataGrid Grid.Row="0"
+                              x:Name="subgroup_grid"
+                              ItemsSource="{Binding subgroups}"
+                              SelectedItem="{Binding selected_subgroup}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal"
+                              HorizontalGridLinesBrush="#EEF2F6"
+                              RowHeaderWidth="0"
+                              FontSize="12">
+                        <DataGrid.Columns>
+                            <!-- ▼ 修正 [7C-fix4]：UpdateSourceTrigger=PropertyChanged を指定する。
+                                 既定（LostFocus）だと、セルが編集中のまま「保存」を押した際に
+                                 入力値がモデルへ書き戻されず、保存されないため。
+                                 セルはダブルクリック（またはF2）で編集できる。 -->
+                            <DataGridTextColumn Header="サブ分類名"
+                                                Binding="{Binding name, UpdateSourceTrigger=PropertyChanged}"
+                                                Width="180" />
+                            <DataGridTextColumn Header="キーワード（カンマ区切り。空欄ならサブ分類名で判定）"
+                                                Binding="{Binding keywords_text, UpdateSourceTrigger=PropertyChanged}"
+                                                Width="*" />
+                            <!-- ▼ 追加 [Sprint 7D]：この行がいくつの区分タブに出るか。
+                                 「未設定」はどこにも表示されない状態を表す -->
+                            <DataGridTextColumn Header="適用先" Binding="{Binding applied_text}"
+                                                Width="70" IsReadOnly="True" />
+                            <!-- ▼ 追加 [7C-fix4]：該当件数（保存前に効果を確認できるようにする） -->
+                            <DataGridTextColumn Header="該当件数" Binding="{Binding hit_count}"
+                                                Width="70" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextAlignment" Value="Right" />
+                                        <Setter Property="Margin" Value="0,0,8,0" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,6,0,0">
+                        <Button Content="＋ サブ分類追加" Command="{Binding add_subgroup_command}"
+                                Padding="10,5" FontSize="12" Margin="0,0,6,0"
+                                ToolTip="左で選択中の区分にだけ適用された状態で追加されます。" />
+                        <Button Content="削除" Command="{Binding delete_subgroup_command}"
+                                Padding="10,5" FontSize="12" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- 選択中のサブ分類を、どの区分タブに出すか -->
+                <Grid Grid.Row="1" Grid.Column="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" BorderBrush="#DDE6EF" BorderThickness="1" CornerRadius="4">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding subgroup_targets}" Margin="8,6">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <!-- 区分名は edit_category を直接バインドするため、
+                                             区分名を変更するとこの表示も追従する -->
+                                        <CheckBox Content="{Binding category.name}"
+                                                  IsChecked="{Binding is_checked}"
+                                                  FontSize="12" Margin="0,3" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,6,0,0"
+                                Visibility="{Binding has_subgroup_selection, Converter={StaticResource BoolToVis}}">
+                        <Button Content="全選択" Command="{Binding select_all_targets_command}"
+                                Padding="10,5" FontSize="12" Margin="0,0,6,0" />
+                        <Button Content="全解除" Command="{Binding clear_all_targets_command}"
+                                Padding="10,5" FontSize="12" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+
         <!-- ===== 状態メッセージ ===== -->
-        <TextBlock Grid.Row="2" Text="{Binding status_message}"
+        <TextBlock Grid.Row="3" Text="{Binding status_message}"
                    FontSize="12" Foreground="#0F5FA8" Margin="2,10,0,0"
                    TextWrapping="Wrap" />
 
         <!-- ===== フッター ===== -->
-        <DockPanel Grid.Row="3" Margin="0,12,0,0">
+        <DockPanel Grid.Row="4" Margin="0,12,0,0">
             <Button DockPanel.Dock="Left" Content="他案件からコピー..."
                     Command="{Binding copy_from_project_command}"
                     Padding="14,7" FontSize="12"
