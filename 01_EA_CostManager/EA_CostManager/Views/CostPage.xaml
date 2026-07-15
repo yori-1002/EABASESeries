@@ -387,48 +387,13 @@
                             <!-- 現場情報バー -->
                             <Border Grid.Row="0" Background="#EEF4FB" Padding="10,6"
                                     BorderThickness="0,0,0,1" BorderBrush="#CCDDF0">
-                                <DockPanel>
-                                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                                        <TextBlock FontWeight="Bold" FontSize="13" Margin="0,0,10,0"
-                                                   Text="{Binding category_code}"/>
-                                        <TextBlock FontSize="13" Margin="0,0,10,0"
-                                                   Text="{Binding site_name}"/>
-                                        <TextBlock FontSize="12" Foreground="#666"
-                                                   Text="{Binding company_name}"/>
-                                        <!-- ▼▼▼ 修正：TextBlock.Textで詳細表示（Runバインド廃止） ▼▼▼ -->
-                                        <TextBlock FontSize="12" Foreground="#444" Margin="10,0,0,0"
-                                                   Text="{Binding detail, Mode=OneWay, StringFormat='詳細：{0}'}">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding detail, Mode=OneWay}" Value="">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding detail, Mode=OneWay}" Value="{x:Null}">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Text="読み込み中..." FontSize="12" Foreground="#999"
-                                                   Margin="16,0,0,0"
-                                                   Visibility="{Binding is_loading, Converter={StaticResource BoolToVis}}"/>
-                                        <!-- ▼▼▼ 追加(B)：再集計中のローディングバー ▼▼▼ -->
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0"
-                                                    Visibility="{Binding is_reaggregating, Converter={StaticResource BoolToVis}}">
-                                            <ProgressBar IsIndeterminate="True" Width="140" Height="8" VerticalAlignment="Center"/>
-                                            <TextBlock Text="再集計中..." FontSize="12" FontWeight="SemiBold"
-                                                       Foreground="#185FA5" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                        <!-- ▼▼▼ 追加：単価変更適用中アナウンス ▼▼▼ -->
-                                        <TextBlock Text="{Binding custom_rate_banner_text}"
-                                                   FontSize="11" FontWeight="Bold"
-                                                   Foreground="#C0392B" Margin="12,0,0,0"
-                                                   VerticalAlignment="Center"
-                                                   Tag="no_print"
-                                                   Visibility="{Binding show_custom_rate_banner, Converter={StaticResource BoolToVis}}"/>
-                                    </StackPanel>
+                                <!-- ▼ 修正 [Sprint 7D]：現場情報バーの並びを変更した。
+                                     以前は現場情報（左）を最初の子として宣言していたため、
+                                     DockPanel の性質上そちらが先に必要なだけ幅を取り、
+                                     詳細（detail）が長い現場ではボタンが押し潰されていた。
+                                     ボタン類を先に宣言して幅を確保し、現場情報は最後の子
+                                     （LastChildFill）として残り幅に収める。 -->
+                                <DockPanel LastChildFill="True">
                                     <!-- ▼▼▼ 修正：ボタン順序 右から（絞り込み → 単価変更）隙間あり ▼▼▼ -->
                                     <!-- ▼▼▼ 追加：全文検索ボックス（印刷の右＝最右端）▼▼▼ -->
                                     <StackPanel DockPanel.Dock="Right"
@@ -610,6 +575,74 @@
                                             </Style>
                                         </Button.Style>
                                     </Button>
+
+                                    <!-- ▼ 修正 [Sprint 7D]：現場情報（DockPanel の最後の子＝残り幅を占有）
+                                         横並びの StackPanel では子に無限幅が与えられるため、
+                                         詳細（detail）がいくら長くても折り返さず他要素を侵食していた。
+                                         Grid にして詳細の列だけを「*」にすることで幅が確定し、
+                                         残り幅の中で折り返すようになる（表示順は従来どおり）。 -->
+                                    <Grid VerticalAlignment="Center">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0" FontWeight="Bold" FontSize="13" Margin="0,0,10,0"
+                                                   VerticalAlignment="Center"
+                                                   Text="{Binding category_code}"/>
+                                        <TextBlock Grid.Column="1" FontSize="13" Margin="0,0,10,0"
+                                                   VerticalAlignment="Center"
+                                                   Text="{Binding site_name}"/>
+                                        <TextBlock Grid.Column="2" FontSize="12" Foreground="#666"
+                                                   VerticalAlignment="Center"
+                                                   Text="{Binding company_name}"/>
+                                        <!-- ▼▼▼ 修正：TextBlock.Textで詳細表示（Runバインド廃止） ▼▼▼ -->
+                                        <!-- ▼ 修正 [Sprint 7D]：残り幅で折り返す。
+                                             それでも収まらない長文はバーが高くなりすぎないよう
+                                             2行までとし、続きは省略記号＋ツールチップで見せる。 -->
+                                        <TextBlock Grid.Column="3" FontSize="12" Foreground="#444" Margin="10,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxHeight="34"
+                                                   ToolTip="{Binding detail, Mode=OneWay}"
+                                                   Text="{Binding detail, Mode=OneWay, StringFormat='詳細：{0}'}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding detail, Mode=OneWay}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding detail, Mode=OneWay}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="4" Text="読み込み中..." FontSize="12" Foreground="#999"
+                                                   Margin="16,0,0,0" VerticalAlignment="Center"
+                                                   Visibility="{Binding is_loading, Converter={StaticResource BoolToVis}}"/>
+                                        <!-- ▼▼▼ 追加(B)：再集計中のローディングバー ▼▼▼ -->
+                                        <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0"
+                                                    Visibility="{Binding is_reaggregating, Converter={StaticResource BoolToVis}}">
+                                            <ProgressBar IsIndeterminate="True" Width="140" Height="8" VerticalAlignment="Center"/>
+                                            <TextBlock Text="再集計中..." FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="#185FA5" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <!-- ▼▼▼ 追加：単価変更適用中アナウンス ▼▼▼ -->
+                                        <TextBlock Grid.Column="6" Text="{Binding custom_rate_banner_text}"
+                                                   FontSize="11" FontWeight="Bold"
+                                                   Foreground="#C0392B" Margin="12,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   Tag="no_print"
+                                                   Visibility="{Binding show_custom_rate_banner, Converter={StaticResource BoolToVis}}"/>
+                                    </Grid>
                                 </DockPanel>
                             </Border>
 
