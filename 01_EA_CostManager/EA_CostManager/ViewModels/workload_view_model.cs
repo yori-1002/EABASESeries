@@ -150,24 +150,18 @@ namespace EA_CostManager.ViewModels
         //   タブは再集計のたびに作り直されるため、VM側の辞書にも控えて生成時に復元する。
         //   キー ＝ 案件ID + 区分ID。これにより現場タブを往復しても状態が保たれる。
         //
-        // ▼ 修正 [Sprint 7E]：この辞書をDB（workload_collapse_states）にも保存する。
-        //   従来はVMのフィールドだけだったため、アプリを再起動すると必ず全展開に戻っていた。
-        //   折りたたんだ状態で終了したなら、次に開いたときも折りたたんだままにする。
-        private readonly Dictionary<string, bool> _expanded_by_tab = new();
+        // ▼ 修正 [Sprint 7E-2]：折りたたまれているグループのキー集合。
+        //   「案件 × 区分タブ × サブ分類」の1グループ単位で持つ。
+        //   既定は展開のため、折りたたまれているものだけを入れる（入っていない＝展開）。
+        //   DB（workload_collapse_states）にも保存し、再起動後も同じ状態で開けるようにする。
+        private readonly HashSet<string> _collapsed_groups = new();
 
-        /// <summary>開閉状態の既定値（展開状態＝従来の見え方を維持）</summary>
-        private const bool EXPANDED_DEFAULT = true;
-
-        /// <summary>開閉状態の保存キー（案件ID＋区分ID）</summary>
-        private static string expand_key(int project_id, workload_tab_item tab)
-            => expand_key(project_id, tab.category_id);
-
-        private static string expand_key(int project_id, int? category_id)
-            => $"{project_id}|{category_id?.ToString() ?? "-"}";
+        /// <summary>折りたたみ状態のキー（案件ID＋区分ID＋サブ分類ID）</summary>
+        private static string collapse_key(int project_id, int? category_id, int? subgroup_id)
+            => $"{project_id}|{category_id?.ToString() ?? "-"}|{subgroup_id?.ToString() ?? "-"}";
 
         /// <summary>
         /// ▼ 追加 [Sprint 7E]：折りたたみ状態をDBから読み込む。
-        /// 既定は展開のため、折りたたまれているタブ（is_collapsed=1）だけを持つ。
         /// 表示上の好みであり業務データではないので、失敗しても画面は出す
         /// （その場合は既定の全展開になるだけ）。
         /// </summary>
@@ -176,17 +170,17 @@ namespace EA_CostManager.ViewModels
             try
             {
                 using var conn = database_manager.create_connection();
-                var rows = await conn.QueryAsync<(int project_id, int category_id)>(@"
-                    SELECT project_id, category_id FROM workload_collapse_states
+                var rows = await conn.QueryAsync<(int project_id, int category_id, int subgroup_id)>(@"
+                    SELECT project_id, category_id, subgroup_id FROM workload_collapse_states
                      WHERE pc_user_id = @uid AND is_collapsed = 1",
                     new { uid = UserSession.user_id });
 
-                _expanded_by_tab.Clear();
+                _collapsed_groups.Clear();
                 foreach (var r in rows)
                 {
-                    int? cat = r.category_id == ViewStateMigration.NO_CATEGORY
-                             ? (int?)null : r.category_id;
-                    _expanded_by_tab[expand_key(r.project_id, cat)] = false;   // 行がある＝折りたたみ
+                    int? cat = r.category_id == ViewStateMigration.NO_CATEGORY ? (int?)null : r.category_id;
+                    int? sub = r.subgroup_id == ViewStateMigration.NO_SUBGROUP ? (int?)null : r.subgroup_id;
+                    _collapsed_groups.Add(collapse_key(r.project_id, cat, sub));
                 }
             }
             catch (Exception ex)
@@ -196,30 +190,33 @@ namespace EA_CostManager.ViewModels
         }
 
         /// <summary>
-        /// ▼ 追加 [Sprint 7E]：1タブ分の折りたたみ状態をDBへ保存する。
+        /// ▼ 修正 [Sprint 7E-2]：1グループ分の折りたたみ状態をDBへ保存する。
         /// 展開に戻したときは行を消す（既定＝展開のため、行を残す意味がない）。
         /// </summary>
-        private static async Task save_collapse_state_async(int project_id, int? category_id, bool expanded)
+        private static async Task save_collapse_state_async(
+            int project_id, int? category_id, int? subgroup_id, bool expanded)
         {
             try
             {
                 int cat = category_id ?? ViewStateMigration.NO_CATEGORY;
+                int sub = subgroup_id ?? ViewStateMigration.NO_SUBGROUP;
                 using var conn = database_manager.create_connection();
 
                 if (expanded)
                 {
                     await conn.ExecuteAsync(@"
                         DELETE FROM workload_collapse_states
-                         WHERE pc_user_id = @uid AND project_id = @pid AND category_id = @cid",
-                        new { uid = UserSession.user_id, pid = project_id, cid = cat });
+                         WHERE pc_user_id = @uid AND project_id = @pid
+                           AND category_id = @cid AND subgroup_id = @sid",
+                        new { uid = UserSession.user_id, pid = project_id, cid = cat, sid = sub });
                 }
                 else
                 {
                     await conn.ExecuteAsync(@"
                         INSERT OR REPLACE INTO workload_collapse_states
-                            (pc_user_id, project_id, category_id, is_collapsed, updated_at)
-                        VALUES (@uid, @pid, @cid, 1, datetime('now','localtime'))",
-                        new { uid = UserSession.user_id, pid = project_id, cid = cat });
+                            (pc_user_id, project_id, category_id, subgroup_id, is_collapsed, updated_at)
+                        VALUES (@uid, @pid, @cid, @sid, 1, datetime('now','localtime'))",
+                        new { uid = UserSession.user_id, pid = project_id, cid = cat, sid = sub });
                 }
             }
             catch (Exception ex)
@@ -228,9 +225,41 @@ namespace EA_CostManager.ViewModels
             }
         }
 
-        /// <summary>開閉ボタンの表示文言（選択中の区分タブの状態と逆の操作を示す）</summary>
+        /// <summary>
+        /// ▼ 追加 [Sprint 7E-2]：グループを1つ作る。
+        /// 前回の折りたたみ状態を復元したうえで、以降の開閉を保存へつなぐ。
+        /// 見出しクリックによる個別の開閉も、「すべて折りたたむ」ボタンも、
+        /// どちらも最終的にここで結んだ expanded_changed を通って保存される。
+        /// </summary>
+        private workload_group make_group(
+            int project_id, int? category_id, int? subgroup_id, string display_text)
+        {
+            string key = collapse_key(project_id, category_id, subgroup_id);
+            var g = new workload_group
+            {
+                subgroup_id = subgroup_id,
+                display_text = display_text,
+                is_expanded = !_collapsed_groups.Contains(key),   // 既定は展開
+            };
+            g.expanded_changed = grp =>
+            {
+                if (grp.is_expanded) _collapsed_groups.Remove(key);
+                else _collapsed_groups.Add(key);
+
+                // 表示上の好みのため、保存の完了を待たずに操作へ反応を返す
+                _ = save_collapse_state_async(project_id, category_id, subgroup_id, grp.is_expanded);
+                OnPropertyChanged(nameof(expand_toggle_text));   // 全開/全閉の判定が変わりうる
+            };
+            return g;
+        }
+
+        /// <summary>
+        /// 開閉ボタンの表示文言（選択中の区分タブの状態と逆の操作を示す）。
+        /// ▼ 修正 [Sprint 7E-2]：1つでも閉じていれば「すべて展開」を出す
+        /// （個別に閉じたグループがある状態から、まとめて開き直せるようにするため）。
+        /// </summary>
         public string expand_toggle_text =>
-            (selected_tab?.all_expanded ?? EXPANDED_DEFAULT) ? "⊟ すべて折りたたむ" : "⊞ すべて展開";
+            (selected_tab?.all_expanded ?? true) ? "⊟ すべて折りたたむ" : "⊞ すべて展開";
 
         /// <summary>グループ表示中のタブでのみ開閉ボタンを出す</summary>
         public bool can_toggle_expand => selected_tab?.is_grouped == true;
@@ -275,18 +304,17 @@ namespace EA_CostManager.ViewModels
         private void toggle_expand()
         {
             var tab = selected_tab;
-            var project = selected_project;
-            if (tab == null || project == null) return;
+            if (tab == null || tab.groups.Count == 0) return;
 
+            // 1つでも閉じていれば「すべて展開」、全部開いていれば「すべて折りたたむ」
             bool next = !tab.all_expanded;
-            tab.all_expanded = next;                                   // このタブのExpanderだけが追従
-            _expanded_by_tab[expand_key(project.id, tab)] = next;      // 再生成に備えて控える
-            OnPropertyChanged(nameof(expand_toggle_text));             // ボタン文言を更新
 
-            // ▼ 追加 [Sprint 7E]：次回起動時にも同じ状態で開けるようDBへ残す。
-            //   表示上の好みのため、保存の完了を待たずにボタンの反応を返す
-            //  （保存に失敗しても画面の操作は妨げない）。
-            _ = save_collapse_state_async(project.id, tab.category_id, next);
+            // ▼ 修正 [Sprint 7E-2]：各グループへ反映する。
+            //   保存は make_group で結んだ expanded_changed が行うため、ここでは呼ばない
+            //  （個別クリックと同じ経路を通す＝保存漏れが起きない）。
+            foreach (var g in tab.groups) g.is_expanded = next;
+
+            OnPropertyChanged(nameof(expand_toggle_text));   // ボタン文言を更新
         }
 
         // ============================================================
@@ -341,7 +369,7 @@ namespace EA_CostManager.ViewModels
             if (_initialized) return;
             _initialized = true;
             // ▼ 追加 [Sprint 7E]：タブを組み立てる前に、前回の折りたたみ状態を読み込む
-            //   （タブ生成時に _expanded_by_tab から復元されるため、順序が重要）
+            //   （タブ生成時に _collapsed_groups から復元されるため、順序が重要）
             await load_collapse_states_async();
             await load_projects_async();
         }
@@ -562,18 +590,25 @@ namespace EA_CostManager.ViewModels
                             var rows_of_sub = cat_rows.Where(r => r.subgroup_id == sub.id).ToList();
                             if (rows_of_sub.Count == 0) continue;   // 該当0件のサブ分類は明細に出さない
 
-                            string header = make_group_header(sub.name, rows_of_sub);
+                            // ▼ 修正 [Sprint 7E-2]：グループ1つにつきオブジェクトを1つ作り、
+                            //   そのグループの全行に同じインスタンスを持たせる（＝グループキー）
+                            var g = make_group(project.id, cat.id, sub.id,
+                                               make_group_header(sub.name, rows_of_sub));
+                            tab.groups.Add(g);
                             foreach (var r in rows_of_sub)
-                                tab.detail_rows.Add(make_detail_row(r, header));
+                                tab.detail_rows.Add(make_detail_row(r, g));
                         }
 
                         // どのサブ分類にも該当しなかった行
                         var rows_none = cat_rows.Where(r => r.subgroup_id == null).ToList();
                         if (rows_none.Count > 0)
                         {
-                            string header = make_group_header(SUBGROUP_NONE, rows_none);
+                            // サブ分類IDを持たないグループ（保存時は NO_SUBGROUP になる）
+                            var g = make_group(project.id, cat.id, null,
+                                               make_group_header(SUBGROUP_NONE, rows_none));
+                            tab.groups.Add(g);
                             foreach (var r in rows_none)
-                                tab.detail_rows.Add(make_detail_row(r, header));
+                                tab.detail_rows.Add(make_detail_row(r, g));
                         }
 
                         tab.is_grouped = true;   // 明細をグループ表示する
@@ -588,12 +623,8 @@ namespace EA_CostManager.ViewModels
                     // ▼ 追加 [7C-fix2]：明細の合計を計算する（明細一覧の下端に表示）
                     set_detail_total(tab, cat_rows);
 
-                    // ▼ 追加 [Sprint 9D-2]：前回この区分タブで設定した開閉状態を復元する
-                    //   （タブは再集計のたびに作り直されるため、VM側の辞書から戻す）
-                    tab.all_expanded =
-                        _expanded_by_tab.TryGetValue(expand_key(project.id, tab), out bool saved_expanded)
-                            ? saved_expanded
-                            : EXPANDED_DEFAULT;
+                    // ▼ 修正 [Sprint 7E-2]：開閉状態の復元は make_group が行うため、ここでは不要
+                    //   （タブは再集計のたびに作り直されるが、_collapsed_groups から戻る）
 
                     // タブ名に件数を付けて、どの区分にどれだけ入ったかを一目で分かるようにする
                     tab.name = $"{cat.name} ({cat_rows.Count})";
@@ -669,11 +700,11 @@ namespace EA_CostManager.ViewModels
         //   区分タブ・未分類タブの両方で使用し、列と書式を統一する。
         //   人日は技師/助手/不明のいずれか1つにしか入らないため、単純加算で総人日になる。
         private static workload_detail_row make_detail_row(
-            workload_task_row r, string subgroup_name = "")
+            workload_task_row r, workload_group? group = null)
         {
             return new workload_detail_row
             {
-                subgroup_name = subgroup_name,   // ▼ 追加 [7C-fix5]
+                group = group,   // ▼ 修正 [Sprint 7E-2]：null＝グループ化しない
                 record_date = r.record_date,
                 employee_name = r.employee_name,
                 job_type = r.job_type,
@@ -744,7 +775,11 @@ namespace EA_CostManager.ViewModels
     ///   [未分類] … 明細一覧のみ
     /// 表示可否は has_summary / has_detail で判定する（コレクションの中身の有無で決まる）。
     /// </summary>
-    public class workload_tab_item : INotifyPropertyChanged
+    /// ▼ 修正 [Sprint 7E-2]：INotifyPropertyChanged を外した。
+    ///   開閉状態を持っていた all_expanded が「グループ側の状態から算出する値」に
+    ///   変わり、変更を通知するプロパティが1つも無くなったため。
+    ///   タブの各プロパティは、タブを tabs へ追加する前に確定する（＝通知不要）。
+    public class workload_tab_item
     {
         public string name { get; set; } = "";
 
@@ -756,24 +791,17 @@ namespace EA_CostManager.ViewModels
         //   （両タブは is_grouped = false でグループ表示しないため開閉の対象外）
         public int? category_id { get; set; }
 
-        // ▼ 追加 [Sprint 9D-2]：このタブのサブ分類グループを展開しているか
-        //   明細のグループ見出し（Expander）の IsExpanded がこの値を参照する。
-        //   タブごとに持つことで、「すべて折りたたむ」が他の区分タブへ波及しなくなる。
-        //   バインドは OneWay のため、利用者が個別にグループを開閉してもこの値は変わらず、
-        //   ボタンを押したときだけそのタブの全グループが一括で切り替わる。
-        private bool _all_expanded = true;   // 既定は展開状態（従来の見え方を維持）
-        public bool all_expanded
-        {
-            get => _all_expanded;
-            set
-            {
-                if (_all_expanded == value) return;
-                _all_expanded = value;
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(all_expanded)));
-            }
-        }
+        // ▼ 修正 [Sprint 7E-2]：このタブのサブ分類グループ一覧（明細の表示順）。
+        //   開閉状態は各 workload_group が個別に持つ。
+        //   旧実装はタブに bool を1つ持つだけ（all_expanded）で、
+        //   Expander とは OneWay で結んでいたため、
+        //   ・個別に開閉しても状態を取得できない
+        //   ・したがって個別の開閉を保存できない
+        //   という制限があった。グループごとに状態を持たせて双方向で結ぶ。
+        public List<workload_group> groups { get; } = new();
 
-        public event PropertyChangedEventHandler? PropertyChanged;
+        /// <summary>このタブのグループがすべて開いているか（ボタン文言の判定に使う）</summary>
+        public bool all_expanded => groups.Count > 0 && groups.All(g => g.is_expanded);
 
         public ObservableCollection<workload_summary_row> summary_rows { get; } = new();
         public ObservableCollection<workload_detail_row> detail_rows { get; } = new();
@@ -812,7 +840,7 @@ namespace EA_CostManager.ViewModels
         private CollectionViewSource? _grouped_detail;
         /// <summary>
         /// ▼ 追加 [7C-fix5]：明細一覧の表示ソース。
-        /// is_grouped が true のときだけ subgroup_name でグループ化する。
+        /// is_grouped が true のときだけ workload_group ごとにグループ化する。
         /// グループ見出しの文字列（小計込み）は VM 側で組み立て済みのため、
         /// XAML では見出しをそのまま表示するだけでよい。
         /// ※ グループ化しない場合も同じ CollectionViewSource を通す。
@@ -828,8 +856,12 @@ namespace EA_CostManager.ViewModels
                     _grouped_detail = new CollectionViewSource { Source = detail_rows };
                     if (is_grouped)
                     {
+                        // ▼ 修正 [Sprint 7E-2]：グループキーは workload_group オブジェクト。
+                        //   同じグループの行には同一インスタンスを入れているため、
+                        //   参照の同一性でグループがまとまる。
+                        //   CollectionViewGroup.Name にこのインスタンスが入る。
                         _grouped_detail.GroupDescriptions.Add(
-                            new PropertyGroupDescription(nameof(workload_detail_row.subgroup_name)));
+                            new PropertyGroupDescription(nameof(workload_detail_row.group)));
                     }
                 }
                 return _grouped_detail;
@@ -850,13 +882,59 @@ namespace EA_CostManager.ViewModels
         public bool is_total { get; set; }
     }
 
+    /// <summary>
+    /// ▼ 追加 [Sprint 7E-2]：明細のサブ分類グループ（見出し＋開閉状態）。
+    ///
+    /// 明細行はこのオブジェクトでグループ化する（同じグループの行は同一インスタンスを参照）。
+    /// WPF の CollectionViewGroup.Name にこのインスタンスが入るため、
+    /// XAML からは Name.display_text（見出し）と Name.is_expanded（開閉）を直接触れる。
+    ///
+    /// 【なぜ文字列でグループ化しないか】
+    /// 以前はグループキーが「笙の川　121 件／…／2,396,050 円」という小計込みの
+    /// 見出し文字列そのものだった。集計値が変わればキーも変わるため、
+    /// 開閉状態を覚えておくための安定した目印にできなかった。
+    /// サブ分類ID を持たせることで、データが変わっても同じグループだと分かる。
+    /// </summary>
+    public class workload_group : INotifyPropertyChanged
+    {
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        /// <summary>サブ分類ID。null＝「（サブ未分類）」グループ</summary>
+        public int? subgroup_id { get; init; }
+
+        /// <summary>グループ見出し（小計込みの文字列）</summary>
+        public string display_text { get; init; } = "";
+
+        private bool _is_expanded = true;
+        /// <summary>
+        /// 開いているか。XAML の Expander と双方向で結ぶ。
+        /// 利用者が見出しをクリックして開閉すると、ここに入ってくる
+        /// （以前は OneWay だったため、個別の開閉を保存できなかった）。
+        /// </summary>
+        public bool is_expanded
+        {
+            get => _is_expanded;
+            set
+            {
+                if (_is_expanded == value) return;
+                _is_expanded = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(is_expanded)));
+                expanded_changed?.Invoke(this);
+            }
+        }
+
+        /// <summary>開閉が変わったことをVMへ伝える（保存とボタン文言の更新に使う）</summary>
+        public Action<workload_group>? expanded_changed;
+    }
+
     /// <summary>▼ 追加 [Sprint 7B]：未分類タブの明細1行</summary>
     public class workload_detail_row
     {
-        // ▼ 追加 [7C-fix5]：この業務行が属するサブ分類名（明細のグループ見出しに使う）
-        //   サブ分類に振り分けられなかった行は「（サブ未分類）」が入る。
-        //   サブ分類を使わない区分・未分類タブでは空文字のままとし、グループ化しない。
-        public string subgroup_name { get; set; } = "";
+        // ▼ 修正 [Sprint 7E-2]：この業務行が属するサブ分類グループ（明細のグループ化に使う）。
+        //   サブ分類を使わない区分・未分類タブでは null のままとし、グループ化しない。
+        //   以前は見出し文字列（subgroup_name）でグループ化していたが、
+        //   小計込みの文字列はデータが変わると変化し、開閉状態の目印にできなかった。
+        public workload_group? group { get; set; }
 
         public string record_date { get; set; } = "";
         public string employee_name { get; set; } = "";

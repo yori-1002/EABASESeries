@@ -20,13 +20,13 @@
 
 ; ▼ 修正：表示名は CostManager（要件：ソフト名称はCostManager）
 #define MyAppName      "CostManager"
-; ▼ 修正 [v1.3.0]：csproj の <Version> と必ず一致させること。
+; ▼ 修正 [v1.3.1]：csproj の <Version> と必ず一致させること。
 ;   ここは Inno Setup 側の定義のため csproj からの自動連動ができない。
 ;   ズレると、中身は新版なのにインストーラー名・レジストリ・
 ;   「プログラムと機能」の表示だけ旧版という状態になる。
 ;   （実際 v1.1.0 のまま取り残されていた）
 ;   publish 出力の 01_version.txt（csproj から自動生成）と突き合わせて確認する。
-#define MyAppVersion   "1.3.0"
+#define MyAppVersion   "1.3.1"
 #define MyAppPublisher "EABASE Series"
 
 ; ▼ 修正：exe名は CostManager.exe（csproj の AssemblyName と一致）

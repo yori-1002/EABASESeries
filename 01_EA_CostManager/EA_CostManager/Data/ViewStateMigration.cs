@@ -54,21 +54,40 @@ namespace EA_CostManager.Data
                     ON month_collapse_states(pc_user_id, filter_tab_id, fiscal_month);");
 
             // ---- 工数表：サブ分類グループの折りたたみ ----
-            // category_id は「全体」「未分類」タブでは区分IDを持たない。
-            // SQLite の UNIQUE は NULL 同士を別物として扱い重複を防げないため、
-            // それらの区分IDは NO_CATEGORY(-1) で表す（実在の区分IDは常に正の値）。
+            // 「案件 × 区分タブ × サブ分類」の1グループごとに持つ。
+            // category_id は「全体」「未分類」タブでは、subgroup_id は「（サブ未分類）」の
+            // グループでは、それぞれ実IDを持たない。SQLite の UNIQUE は NULL 同士を
+            // 別物として扱い重複を防げないため、NULL の代わりに -1 を入れる
+            //（実在のIDは常に正の値のため衝突しない）。
+            //
+            // ▼ 修正 [Sprint 7E-2]：subgroup_id を追加した。
+            //   初版は区分タブ単位（サブ分類ごとの区別なし）だったため、
+            //   グループ見出しを個別に開閉した状態を覚えられなかった。
+            //   旧定義のテーブルが残っている場合は作り直す。未リリースであり、
+            //   保持しているのが折りたたみの好みだけなので作り直して差し支えない。
+            bool table_exists = conn.ExecuteScalar<int>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='workload_collapse_states'") > 0;
+            if (table_exists)
+            {
+                bool has_subgroup_id = conn.ExecuteScalar<int>(
+                    "SELECT COUNT(*) FROM pragma_table_info('workload_collapse_states') WHERE name='subgroup_id'") > 0;
+                if (!has_subgroup_id)
+                    conn.Execute("DROP TABLE workload_collapse_states");
+            }
+
             conn.Execute(@"
                 CREATE TABLE IF NOT EXISTS workload_collapse_states (
                     id           INTEGER PRIMARY KEY AUTOINCREMENT,
                     pc_user_id   INTEGER NOT NULL,
                     project_id   INTEGER NOT NULL,
                     category_id  INTEGER NOT NULL,
+                    subgroup_id  INTEGER NOT NULL,
                     is_collapsed INTEGER NOT NULL DEFAULT 0,
                     updated_at   TEXT    DEFAULT (datetime('now','localtime'))
                 );");
             conn.Execute(@"
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_workload_collapse
-                    ON workload_collapse_states(pc_user_id, project_id, category_id);");
+                    ON workload_collapse_states(pc_user_id, project_id, category_id, subgroup_id);");
         }
 
         /// <summary>
@@ -76,5 +95,11 @@ namespace EA_CostManager.Data
         /// UNIQUE 制約を効かせるため NULL の代わりに用いる。
         /// </summary>
         public const int NO_CATEGORY = -1;
+
+        /// <summary>
+        /// 「（サブ未分類）」グループのようにサブ分類IDを持たないグループを表す値。
+        /// NO_CATEGORY と同じ理由で NULL の代わりに用いる。
+        /// </summary>
+        public const int NO_SUBGROUP = -1;
     }
 }

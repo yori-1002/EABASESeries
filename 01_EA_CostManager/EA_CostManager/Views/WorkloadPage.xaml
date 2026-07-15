@@ -304,8 +304,8 @@
                                                  未登録のキーワードを拾う運用を想定している。 -->
                                             <!-- ▼ 修正 [7C-fix5]：明細をサブ分類ごとにグループ表示する。
                                                  grouped_detail（CollectionViewSource）を経由することで、
-                                                 subgroup_name ごとに見出し付きで区切られる。
-                                                 サブ分類が未登録の区分・未分類タブでは subgroup_name が空のため、
+                                                 サブ分類ごとに見出し付きで区切られる。
+                                                 サブ分類が未登録の区分・未分類タブではグループが無いため、
                                                  見出しは1つも作られず、従来どおりの一覧表示になる。 -->
                                             <DataGrid Grid.Row="1"
                                                       ItemsSource="{Binding grouped_detail.View}"
@@ -327,15 +327,14 @@
                                                      ここでは表示するだけでよい（XAML側での再集計は行わない）。 -->
                                                 <!-- ▼ 修正 [Sprint 9D-2]：サブ分類グループを折り畳み・展開できるようにする。
                                                      ContainerStyle で Expander を使い、見出しクリックで開閉する。
-                                                     IsExpanded のバインド先は「このタブ（workload_tab_item）の all_expanded」。
-                                                     AncestorType=DataGrid で辿るのは、この DataGrid の DataContext が
-                                                     タブ自身（workload_tab_item）だから。
-                                                     ※ 旧実装は UserControl（＝ページVM）の all_expanded を見ていたため、
-                                                       値が全タブで共有され、ある区分タブで折りたたむと他の区分タブまで
-                                                       折りたたまれたままになっていた。タブ自身の値を見ることで、
-                                                       「すべて折りたたむ」は今見ているタブにだけ効く。
-                                                     （Mode=OneWay にしておくことで、個別に開閉してもタブ側の値は変わらず、
-                                                       ボタンを押した時だけそのタブの全グループが一括で切り替わる） -->
+                                                     ▼ 修正 [Sprint 7E-2]：グループ1つ＝workload_group オブジェクト1つ。
+                                                     Name にはそのインスタンスが入る（VMでグループキーにしているため）。
+                                                     IsExpanded は Name.is_expanded と双方向で結ぶ。
+                                                     ※ 旧実装はタブの all_expanded を OneWay で見ていたため、
+                                                       見出しを個別にクリックして開閉しても値がVMへ戻らず、
+                                                       その状態を保存できなかった（再起動で必ず全展開に戻っていた）。
+                                                       双方向にすることで、個別の開閉も「すべて折りたたむ」ボタンも
+                                                       同じ経路でVMに伝わり、そのまま保存される。 -->
                                                 <DataGrid.GroupStyle>
                                                     <GroupStyle>
                                                         <GroupStyle.ContainerStyle>
@@ -347,12 +346,11 @@
                                                                                       Background="#D6E4F0"
                                                                                       BorderBrush="#8FAECB"
                                                                                       BorderThickness="0,0,0,1"
-                                                                                      IsExpanded="{Binding DataContext.all_expanded,
-                                                                                                   RelativeSource={RelativeSource AncestorType=DataGrid},
-                                                                                                   Mode=OneWay, FallbackValue=True}">
+                                                                                      IsExpanded="{Binding Name.is_expanded,
+                                                                                                   Mode=TwoWay, FallbackValue=True}">
                                                                                 <Expander.Header>
-                                                                                    <!-- Name にはVMで組み立てた小計込みの見出し文字列が入る -->
-                                                                                    <TextBlock Text="{Binding Name}"
+                                                                                    <!-- 見出し（小計込み）はVMで組み立て済み -->
+                                                                                    <TextBlock Text="{Binding Name.display_text}"
                                                                                                FontSize="12" FontWeight="Bold" Foreground="#123"
                                                                                                Margin="2,3,0,3" />
                                                                                 </Expander.Header>
