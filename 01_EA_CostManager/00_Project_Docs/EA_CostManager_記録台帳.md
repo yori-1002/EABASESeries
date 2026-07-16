@@ -38,7 +38,7 @@
 | コミット済み最新 | **v1.3.1**（コミット `bdffa52`・develop） | git log |
 | csproj バージョン | **v1.3.1**（`<Version>1.3.1`） | csproj 34–36行 |
 | インストーラ版数 | **v1.3.1**（`EA_CostManager_setup.iss` の `MyAppVersion`） | .iss 29行 |
-| v1.3.1 の実装状態 | **develop にコミット済み・リリースビルド作成済み**（`EA_CostManager/publish/`）。**main へは未反映**・インストーラ未作成 | git log / publish 出力 |
+| v1.3.1 の実装状態 | **develop にコミット済み・リリースビルド＋インストーラ作成済み**（`installer_output/EA_CostManager_setup_v1.3.1.exe`）。**main へは未反映**・**画面での動作確認が未実施** | git log / publish・installer_output |
 
 > ⚠️ **リリース番号の経緯（2026-07-15）**: 前回リリースは v1.1.0。開発中に付番した **v1.2.1 / v1.2.2 は develop 内のみで一度もリリースしていない**。
 > 工数表という新機能の追加のためマイナーを上げ、**v1.3.0** としてリリース版を確定（その後の折りたたみ修正で v1.3.1）。
@@ -433,7 +433,11 @@ pc_users / user_sessions / operation_logs / error_logs（7日自動削除）/ ap
 | バックアップ | `\\NAS7E6AA6\...\01_Backups\01_Cost Manager`（テストは `_test` サブフォルダ） |
 | 設定JSON | `%LOCALAPPDATA%\01_EABASE Series\01_CostManager\user_settings.json` |
 | 破損設定退避 | `...\user_settings.json.broken_yyyyMMdd_HHmmss` |
-| GitHubブランチ | **main（リリースは必ず main を使用）** |
+| GitHubブランチ | リポジトリ `https://github.com/yori-1002/EABASESeries.git`。作業は **develop に集約**し、**リリース時のみ main へ早送り**（2026-07-15 の yori 指示） |
+| publish 出力 | `01_EA_CostManager\EA_CostManager\publish\`（`CostManager.exe` / `01_version.txt` / `icon_fix.ico`）。`.iss` の `MySourceDir` がここを指す |
+| インストーラ出力 | `01_EA_CostManager\installer_output\EA_CostManager_setup_vX.X.X.exe`（`.iss` の `OutputDir` は .iss からの相対） |
+| Inno Setup | **`C:\Users\earth\AppData\Local\Programs\Inno Setup 6\`（6.7.1）**。⚠️ **ユーザー領域へのインストール**のため `Program Files` にも HKLM のアンインストール登録にも無い。CLI は同フォルダの `ISCC.exe`（GUI は `Compil32.exe`） |
+| 更新配布先(NAS) | `\\NAS7E6AA6\...\02_Updates\01_Cost Manager\` に `EA_CostManager_setup_vX.X.X.exe` と `01_version.txt` を置くと自動アップデートが発火 |
 
 > ⚠️ **DB接続先の整合性に関する注意（正確性重視ルール）**: 本システムは NAS DB とローカルDB（フォールバック）の二段構成。
 > 書込先と読込先の不一致・フォールバック時の整合性は、コード修正時に必ず確認する必要がある領域。
@@ -447,7 +451,7 @@ pc_users / user_sessions / operation_logs / error_logs（7日自動削除）/ ap
 | # | 事実 | 確度 | 影響／推奨アクション |
 | --- | --- | --- | --- |
 | 1 | ~~csproj の `<Version>` が **1.1.0 のまま**~~ → **2026-07-15 解消**。csproj・`setup.iss` とも **v1.3.1** に更新 | **確定**（csproj 34–36行・.iss 29行） | **対応完了**。`.iss` 側は csproj から自動連動しないため、**今後もリリースのたびに2箇所を合わせること**（0章の注意書き参照） |
-| 2 | ~~工数表機能の新規ファイル群が**未コミット**~~ → **2026-07-15 解消**。develop に7コミット（`9f772d2`〜`bdffa52`）・リリースビルド作成済み | **確定**（git log・publish 出力） | **対応完了**。ただし **main へは未反映**・**インストーラ未作成**・**画面での動作確認が未実施**（#12） |
+| 2 | ~~工数表機能の新規ファイル群が**未コミット**~~ → **2026-07-15 解消**。develop にコミット済み・**2026-07-16 にリリースビルドとインストーラも作成** | **確定**（git log・installer_output） | **対応完了**。残る未了は **main へ未反映**（yori が実行）と **画面での動作確認が未実施**（#12） |
 | 3 | 設計書に個別記載のない実装ファイルが存在：`workload_classify_view_model.cs`(914行)・`WorkloadClassifyDialog`・`WorkloadCopyDialog`・`WorkloadKeywordDialog` | **確定**（存在・役割とも 2026-07-15 の精査で確定。「12.1」参照） | 設計書は分類設定UIを「暫定（標準区分セット作成）」とするが、**実装は3ペインの本格的な分類設定UI＋他案件コピー＋明細からのキーワード登録まで到達しており、設計書より先行している**（確定）。→ 次回の設計書更新で反映が必要 |
 | 9 | ~~**工数表と業務単位集計の合計が、サブ分類なしの全体表示でもズレる**（単価キーの優先順が逆）~~ → **2026-07-15 修正済み**（12章の該当ログ参照） | **確定**（実ソース＋実DB調査で裏付け済み） | **対応完了**。`WorkloadAggregationService.cs:173-174` のキー優先順を `engineer_daily_rate`→`engineer_rate` に逆転し、設定画面・日単位集計・業務単位集計・工数表の4者が同じ値を見るようにした。詳細な調査結果は「6.4」参照 |
 | 6 | 設計書 6.1 の「対象案件＝`agg_mode='task'` のみ」という記述が実装と不一致。実装は `cost_filter_tabs`(`agg_mode='task' AND is_archived=0`)との **OR 条件** | **確定**（`workload_view_model:266-277`・`[9A-fix2]` コメント） | 本 md 6.1 は 2026-07-15 に修正済み。**設計書側も次回更新時に要修正** |
@@ -512,6 +516,7 @@ pc_users / user_sessions / operation_logs / error_logs（7日自動削除）/ ap
 | 2026-07-15 | v1.3.0 | `EA_CostManager.csproj`<br>`EA_CostManager_setup.iss` | **リリース版数を v1.3.0 に確定（コミット `9eb1a23`）**。前回リリースが v1.1.0 で、v1.2.1 / v1.2.2 は develop 内のみの未リリース版のため、新機能（工数表）の追加としてマイナーを上げた。**`.iss` の `MyAppVersion` が v1.1.0 のまま取り残されていた**ことを発見し是正——そのままだと `EA_CostManager_setup_v1.1.0.exe` として出力され、レジストリと「プログラムと機能」の表示も 1.1.0 になるところだった。Inno Setup 側は csproj から自動連動できないため、**両方を合わせる旨を双方のコメントに明記**。 | 修正 |
 | 2026-07-15 | v1.3.1 | `ViewModels/workload_view_model.cs`<br>`Views/WorkloadPage.xaml`<br>`Data/ViewStateMigration.cs`<br>`EA_CostManager.csproj`<br>`EA_CostManager_setup.iss` | **工数表の折りたたみをグループ単位で保存（`[Sprint 7E-2]`・コミット `bdffa52`）**。v1.3.0 でも維持されず、DB を調べると `workload_collapse_states` は**0行＝保存が一度も走っていなかった**（月度側は35行で正常）。原因は保存の粒度とグループとVMの結び方：①状態がタブ単位の bool 1つ（`all_expanded`）しかなく、**見出しを個別に開閉した状態を表現できなかった** ②Expander の `IsExpanded` がタブの `all_expanded` と **`Mode=OneWay`** で結ばれ、個別に開閉しても値がVMへ戻らず保存する手段が無かった ③**グループキーが「笙の川　121 件／…／2,396,050 円」という小計込みの見出し文字列**で、集計値が変わればキーも変わるため開閉状態の安定した目印にできなかった。実装：①`workload_group`（サブ分類ID＋見出し＋開閉状態）を追加し、明細行はこのインスタンスでグループ化（キーがIDベースになり安定） ②`IsExpanded` を `Name.is_expanded` と**双方向**で結び、個別クリックも「すべて折りたたむ」ボタンも**同じ経路でVMに伝わり保存**（ボタンは全グループの `is_expanded` を設定するだけにして保存経路を一本化＝保存漏れが起きない） ③`workload_collapse_states` に `subgroup_id` を追加。旧定義のテーブルが残っていれば検知して作り直す（未リリースかつ保持しているのが折りたたみの好みだけのため） ④「（サブ未分類）」は `NO_SUBGROUP(-1)`（SQLite の UNIQUE は NULL 同士を別物として扱い重複を防げないため） ⑤`all_expanded` をグループ側の状態から算出する値に変更＝`workload_tab_item` から変更通知が不要になり `INotifyPropertyChanged` を除去。**ボタン経路が0行になった直接原因は静的な読みでは特定できず、推測で当てにいかず作りごと入れ替えた**（個別対応には結局この作りを変える必要があり、直せばボタン側も同じ経路を通るため）。**検証**：旧定義テーブルの作り直し・冪等性、グループごとに独立して保存され重複しないこと（サブ未分類・別区分タブの同一サブ分類を含む）、展開に戻すと当該行だけ消えることを確認。行数 VM 790→**946**／XAML 487→**485**。**画面での動作確認は未実施**。 | 修正 |
 | 2026-07-15 | v1.3.1 | `EA_CostManager/publish/`（成果物） | **リリースビルドを作成**。`dotnet publish -c Release -r win-x64 --self-contained true -p:DebugType=embedded -o publish`。出力＝`CostManager.exe`（65.8MB・自己完結シングルファイル）／`01_version.txt`（`1.3.1`・csproj から自動生成）／`icon_fix.ico`。`.iss` の `MySourceDir` が指す場所と一致。EXE のプロパティを実測確認＝FileVersion `1.3.1.0` / ProductVersion `1.3.1+bdffa52`。**インストーラ（Inno Setup）は未作成・main への push も未実施**。 | 追加 |
+| 2026-07-16 | v1.3.1 | `EA_CostManager/publish/`<br>`installer_output/`（新規）<br>`00_Project_Docs/EA_CostManager_記録台帳.md` | **インストーラを作成（`EA_CostManager_setup_v1.3.1.exe`・60.9MB）**。①**publish を develop 先端で作り直した**——初回ビルドは `bdffa52` 時点で、その後の `7141766`（台帳MDのみの変更）とコード差分は無かったが、EXE に埋め込まれる ProductVersion が `1.3.1+bdffa52` のままで**成果物とコミットの対応が追えなくなる**ため。作り直し後は `1.3.1+7141766` で develop 先端と一致。②`ISCC.exe`（Inno Setup CLI）で `EA_CostManager_setup.iss` をコンパイル。ExitCode 0。**Inno Setup 6.7.1 は `C:\Users\earth\AppData\Local\Programs\Inno Setup 6\` にユーザー領域インストールされており**、`Program Files` にも HKLM のアンインストール登録にも無い（9章に追記）。③**検証**：インストーラのプロパティ＝ProductName `CostManager` / ProductVersion `1.3.1` / CompanyName `EABASE Series`、同梱 EXE の ProductVersion＝`1.3.1+7141766`、`01_version.txt`＝`1.3.1`。④9章に publish 出力先・インストーラ出力先・Inno Setup のパス・NAS 更新配布先を追記。0章／10章 #2 を「インストーラ作成済み」に更新。**未了**：NAS 配置・main への push・画面での動作確認。⚠️ コンパイル時に `Minimum version is set to 6.1 but using 6.1sp1 is recommended` の警告が出るが、`MinVersion=6.1` は既存設定のため**指示外として変更していない**（要判断）。 | 追加 |
 | 2026-07-15 | v1.3.1 | `00_Project_Docs/EA_CostManager_記録台帳.md` | **本台帳を v1.2.1〜v1.3.1 の作業に追随させた（運用ルール #1 の取りこぼしを是正）**。⚠️ **経緯の記録**：上記 v1.2.1〜v1.3.1 の一連の作業（コミット `9f772d2`〜`bdffa52` の7コミット）は、**その都度の反映ができておらず、yori の指摘を受けて事後にまとめて追記した**。原因は、運用ルール #1 が本 md の内部にのみ書かれており、作業者（ジェイ）が本 md を読むまでルールの存在を認識していなかったこと。**恒久対策として `CLAUDE.md` の新設を提案**（10章 #11）。反映内容：0章サマリ（版数・リリース経緯・バージョン表記が2箇所ある注意）／3.2（`ViewStateMigration.cs` 追加・`WorkloadMigration.cs` 113→206）／7.4（`workload_subgroup_links` 追加・`category_id` 廃止・モード2値化・適用先の設計変更）／7.5 新設（表示状態テーブル）／12 更新ログ（本表）。行数はすべて実ファイルで実測。 | 修正 |
 
 ### 12.1 v1.2.0 工数表機能（遡及記載・2026-07-15 時点で**未コミット**）
