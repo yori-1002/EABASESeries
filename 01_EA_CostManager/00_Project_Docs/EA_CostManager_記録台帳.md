@@ -535,6 +535,31 @@ DB 接続の中核方針は「NAS の SQLite を直接開くのをやめ、各PC
 | D3 | 参照整合の適用順序 | `foreign_keys=ON`(A2) のため、親の tombstone と子の追加が競合すると FK 違反・孤児。適用順（親→子）と tombstone 済み親に子が来た時の扱いを決める |
 | D4 | 同期対象テーブルの線引き | `user_sessions` のオンライン表示はリアルタイム性が要り、数分間隔の差分ファイル同期と相性が悪い。別扱いにするか諦めるか要判断 |
 
+**決定事項（2026-07-17・yori）**
+
+| 論点 | 決定 | 補足 |
+| --- | --- | --- |
+| つなぎの安全策 | **Phase 0 を先に入れる** | 本実装完成まで2人目は読取専用。下に具体設計 |
+| 同期対象（D4） | **全テーブル同期** | ⚠️ ただし `user_sessions`（2分ごとに全PCがハートビート更新）を差分ファイルで同期すると changelog が過剰に膨らみ、オンライン表示の即時性も落ちる。**high-churn/リアルタイム系（`user_sessions`・`operation_logs`・`error_logs`）は carve-out して現状方式のまま別扱いにするのを強く推奨**（実装時に再確認）。業務データは全同期でよい |
+| マージ単位（D1） | **列単位マージ** | changelog の payload は**変更列だけ**を記録。別列を編集した同時変更は両方残す。D2（row_version 採番）・D3（FK 適用順）は実装時に決める |
+| codex レビュー | **本節は未レビュー** | yori 運用（設計→codex→実装）に従い、実装着手前に通す |
+
+**Phase 0 実装設計（提案・未実装／codex レビュー対象）**
+
+目的：現状の NAS 直結のまま、**同時書込による破損を防ぐ**。1台だけ書込可能、2台目以降は読取専用。
+
+| 項目 | 設計 |
+| --- | --- |
+| ロック方式 | NAS 上の**ロックファイル**（例：`ea_core.db.lock`）。SQLite 自身のロックは SMB で不安定なため使わない。DIMS と同じく `.tmp`→rename／`FileMode.CreateNew` で原子的に確保 |
+| ロック内容 | device_id（MAC/pc_name）・user_name・acquired_at・heartbeat_at（ISO8601） |
+| 起動時 | `switch_to_nas`（`database_manager.cs:611`）後に取得を試みる。ロックが無い or heartbeat が陳腐化（既存のセッション掃除と同じ 5分基準）→ 確保して書込可。新しいロックが有る→**読取専用**で開く |
+| ハートビート | 既存 `main_view_model` の2分 `DispatcherTimer`（`:135/139`）を流用して heartbeat_at を更新 |
+| 読取専用の強制 | ⚠️ 書込口が `CostPage.xaml.cs`・各VM・各Service に分散しており完全な強制は難しい。**最小実装＝主要な保存入口（保存・日報取込・単価変更・分類設定保存 等）を読取専用フラグで無効化＋敬語バナー表示**。完全な強制は Phase 1 の書込層集約で担保（Phase 0 と一部重なる＝無駄にならない） |
+| 解放 | 終了時にロックファイル削除（既存のセッション掃除と同じくベストエフォート）。異常終了時は陳腐化ロックを次の起動が引き継ぐ |
+| バナー文言（敬語） | 例「他の利用者が編集中のため、閲覧のみのモードで開いております。」 |
+
+> 依存関係の指摘：Phase 0 の読取専用強制と Phase 1 の書込層集約は重なる。書込層を先に薄く集約すると Phase 0 の強制が1箇所で済むが、yori 選択（Phase 0 先行）に従い、まずは主要入口＋バナーの最小実装とする。
+
 ---
 
 ## 12. 更新ログ（プログラム修正・追加の記録）
@@ -564,6 +589,7 @@ DB 接続の中核方針は「NAS の SQLite を直接開くのをやめ、各PC
 | 2026-07-15 | v1.3.0 | `EA_CostManager.csproj`<br>`EA_CostManager_setup.iss` | **リリース版数を v1.3.0 に確定（コミット `9eb1a23`）**。前回リリースが v1.1.0 で、v1.2.1 / v1.2.2 は develop 内のみの未リリース版のため、新機能（工数表）の追加としてマイナーを上げた。**`.iss` の `MyAppVersion` が v1.1.0 のまま取り残されていた**ことを発見し是正——そのままだと `EA_CostManager_setup_v1.1.0.exe` として出力され、レジストリと「プログラムと機能」の表示も 1.1.0 になるところだった。Inno Setup 側は csproj から自動連動できないため、**両方を合わせる旨を双方のコメントに明記**。 | 修正 |
 | 2026-07-15 | v1.3.1 | `ViewModels/workload_view_model.cs`<br>`Views/WorkloadPage.xaml`<br>`Data/ViewStateMigration.cs`<br>`EA_CostManager.csproj`<br>`EA_CostManager_setup.iss` | **工数表の折りたたみをグループ単位で保存（`[Sprint 7E-2]`・コミット `bdffa52`）**。v1.3.0 でも維持されず、DB を調べると `workload_collapse_states` は**0行＝保存が一度も走っていなかった**（月度側は35行で正常）。原因は保存の粒度とグループとVMの結び方：①状態がタブ単位の bool 1つ（`all_expanded`）しかなく、**見出しを個別に開閉した状態を表現できなかった** ②Expander の `IsExpanded` がタブの `all_expanded` と **`Mode=OneWay`** で結ばれ、個別に開閉しても値がVMへ戻らず保存する手段が無かった ③**グループキーが「笙の川　121 件／…／2,396,050 円」という小計込みの見出し文字列**で、集計値が変わればキーも変わるため開閉状態の安定した目印にできなかった。実装：①`workload_group`（サブ分類ID＋見出し＋開閉状態）を追加し、明細行はこのインスタンスでグループ化（キーがIDベースになり安定） ②`IsExpanded` を `Name.is_expanded` と**双方向**で結び、個別クリックも「すべて折りたたむ」ボタンも**同じ経路でVMに伝わり保存**（ボタンは全グループの `is_expanded` を設定するだけにして保存経路を一本化＝保存漏れが起きない） ③`workload_collapse_states` に `subgroup_id` を追加。旧定義のテーブルが残っていれば検知して作り直す（未リリースかつ保持しているのが折りたたみの好みだけのため） ④「（サブ未分類）」は `NO_SUBGROUP(-1)`（SQLite の UNIQUE は NULL 同士を別物として扱い重複を防げないため） ⑤`all_expanded` をグループ側の状態から算出する値に変更＝`workload_tab_item` から変更通知が不要になり `INotifyPropertyChanged` を除去。**ボタン経路が0行になった直接原因は静的な読みでは特定できず、推測で当てにいかず作りごと入れ替えた**（個別対応には結局この作りを変える必要があり、直せばボタン側も同じ経路を通るため）。**検証**：旧定義テーブルの作り直し・冪等性、グループごとに独立して保存され重複しないこと（サブ未分類・別区分タブの同一サブ分類を含む）、展開に戻すと当該行だけ消えることを確認。行数 VM 790→**946**／XAML 487→**485**。**画面での動作確認は未実施**。 | 修正 |
 | 2026-07-15 | v1.3.1 | `EA_CostManager/publish/`（成果物） | **リリースビルドを作成**。`dotnet publish -c Release -r win-x64 --self-contained true -p:DebugType=embedded -o publish`。出力＝`CostManager.exe`（65.8MB・自己完結シングルファイル）／`01_version.txt`（`1.3.1`・csproj から自動生成）／`icon_fix.ico`。`.iss` の `MySourceDir` が指す場所と一致。EXE のプロパティを実測確認＝FileVersion `1.3.1.0` / ProductVersion `1.3.1+bdffa52`。**インストーラ（Inno Setup）は未作成・main への push も未実施**。 | 追加 |
+| 2026-07-17 | — | `00_Project_Docs/EA_CostManager_記録台帳.md` | **DIMS の DB 接続設計に「決定事項」と「Phase 0 実装設計」を追記（提案・未実装）**。yori が4点を決定：つなぎは Phase 0 先行／同期対象は全テーブル（⚠️ user_sessions 等 high-churn/リアルタイム系は carve-out 推奨と明記）／マージは列単位／codex は未レビュー。Phase 0 の具体設計＝NAS ロックファイル方式（`.tmp`→rename・5分陳腐化基準・既存2分タイマー流用・主要保存入口の読取専用化＋敬語バナー）を表で記載。書込層集約（Phase 1）との重なりも指摘。**codex レビュー対象。レビュー未通過のため実装コードは未着手**（yori 指示「問題なければ進める」のゲート未クリア）。 | 追加 |
 | 2026-07-17 | — | `00_Project_Docs/EA_CostManager_記録台帳.md` | **DIMS 方式による DB 接続設計を 11 章に追記（提案・未実装）**。yori 指示により、DIMS_SQLite共有_設計書_v0.1.0 のレビューと段階実装方針を台帳へ記録。AS-IS（現状の DB 接続の確定事実）と TO-BE（提案）を分離：AS-IS＝`create_connection()` が NAS UNC を直結（`database_manager.cs:70/76/611`）・WAL/busy_timeout=5000/foreign_keys=ON（`:84/91/95`）・WAL は SMB で非対応・行識別GUID/changelog/行バージョン/楽観ロックは無し（主キー全て AUTOINCREMENT、`Guid.NewGuid` は `import_view_model.cs:267` の batch_id のみ）・ローカルDB は `Documents\EA_DataCore\db\ea_core.db`（`:19`）・常駐タイマーは `main_view_model.cs:65/135/139` に既存。TO-BE＝ローカルレプリカ＋変更ファイル受け渡し、常駐エージェントは作らずアプリ内タイマー、Phase 0（NAS ロック＋2人目読取専用）/1（row_guid・row_version・changelog・書込層集約）/2（同期本体）。設計書側の宿題4点（列単位マージ不可・row_version 採番・FK 適用順・同期対象の線引き）も記載。**codex レビュー対象**。引用した行番号・事実はすべて実コードで確認済み。 | 追加 |
 | 2026-07-16 | v1.3.1 | `EA_CostManager/publish/`<br>`installer_output/`（新規）<br>`00_Project_Docs/EA_CostManager_記録台帳.md` | **インストーラを作成（`EA_CostManager_setup_v1.3.1.exe`・60.9MB）**。①**publish を develop 先端で作り直した**——初回ビルドは `bdffa52` 時点で、その後の `7141766`（台帳MDのみの変更）とコード差分は無かったが、EXE に埋め込まれる ProductVersion が `1.3.1+bdffa52` のままで**成果物とコミットの対応が追えなくなる**ため。作り直し後は `1.3.1+7141766` で develop 先端と一致。②`ISCC.exe`（Inno Setup CLI）で `EA_CostManager_setup.iss` をコンパイル。ExitCode 0。**Inno Setup 6.7.1 は `C:\Users\earth\AppData\Local\Programs\Inno Setup 6\` にユーザー領域インストールされており**、`Program Files` にも HKLM のアンインストール登録にも無い（9章に追記）。③**検証**：インストーラのプロパティ＝ProductName `CostManager` / ProductVersion `1.3.1` / CompanyName `EABASE Series`、同梱 EXE の ProductVersion＝`1.3.1+7141766`、`01_version.txt`＝`1.3.1`。④9章に publish 出力先・インストーラ出力先・Inno Setup のパス・NAS 更新配布先を追記。0章／10章 #2 を「インストーラ作成済み」に更新。**未了**：NAS 配置・main への push・画面での動作確認。⚠️ コンパイル時に `Minimum version is set to 6.1 but using 6.1sp1 is recommended` の警告が出るが、`MinVersion=6.1` は既存設定のため**指示外として変更していない**（要判断）。 | 追加 |
 | 2026-07-15 | v1.3.1 | `00_Project_Docs/EA_CostManager_記録台帳.md` | **本台帳を v1.2.1〜v1.3.1 の作業に追随させた（運用ルール #1 の取りこぼしを是正）**。⚠️ **経緯の記録**：上記 v1.2.1〜v1.3.1 の一連の作業（コミット `9f772d2`〜`bdffa52` の7コミット）は、**その都度の反映ができておらず、yori の指摘を受けて事後にまとめて追記した**。原因は、運用ルール #1 が本 md の内部にのみ書かれており、作業者（ジェイ）が本 md を読むまでルールの存在を認識していなかったこと。**恒久対策として `CLAUDE.md` の新設を提案**（10章 #11）。反映内容：0章サマリ（版数・リリース経緯・バージョン表記が2箇所ある注意）／3.2（`ViewStateMigration.cs` 追加・`WorkloadMigration.cs` 113→206）／7.4（`workload_subgroup_links` 追加・`category_id` 廃止・モード2値化・適用先の設計変更）／7.5 新設（表示状態テーブル）／12 更新ログ（本表）。行数はすべて実ファイルで実測。 | 修正 |
