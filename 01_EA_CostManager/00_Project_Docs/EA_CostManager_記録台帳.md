@@ -38,7 +38,7 @@
 | コミット済み最新 | **v1.3.1**（コミット `bdffa52`・develop） | git log |
 | csproj バージョン | **v1.3.1**（`<Version>1.3.1`） | csproj 34–36行 |
 | インストーラ版数 | **v1.3.1**（`EA_CostManager_setup.iss` の `MyAppVersion`） | .iss 29行 |
-| v1.3.1 の実装状態 | **develop にコミット済み・リリースビルド＋インストーラ作成済み**（`installer_output/EA_CostManager_setup_v1.3.1.exe`）。**main へは未反映**・**画面での動作確認が未実施** | git log / publish・installer_output |
+| v1.3.1 の実装状態 | **develop にコミット済み・リリースビルド＋インストーラ作成済み**。成果物は作成後に外部へコピーし、ワークスペース内の `publish/`・`installer_output/` は削除する運用。**main へは未反映**・**画面での動作確認が未実施** | git log / yori 運用 |
 
 > ⚠️ **リリース番号の経緯（2026-07-15）**: 前回リリースは v1.1.0。開発中に付番した **v1.2.1 / v1.2.2 は develop 内のみで一度もリリースしていない**。
 > 工数表という新機能の追加のためマイナーを上げ、**v1.3.0** としてリリース版を確定（その後の折りたたみ修正で v1.3.1）。
@@ -134,7 +134,7 @@
 
 ## 3. アーキテクチャ（実ソース構成）
 
-MVVM構成。`.cs` 実ソース合計 **約22,094行**（obj/bin除く）。以下は実在ファイルと行数（確定値）＋役割。
+MVVM構成。`.cs` 実ソース合計 **22,850行**（2026-07-17 実測、89ファイル、bin/obj/publish除く）。以下は実在ファイルと行数（確定値）＋役割。
 役割のうち★は設計書で明示、無印はファイル名からの確度の高い推定、（推測）は中身未精査の推定。
 
 ### 3.1 エントリ・基盤
@@ -151,7 +151,7 @@ MVVM構成。`.cs` 実ソース合計 **約22,094行**（obj/bin除く）。以�
 ### 3.2 Data（DB管理・マイグレーション）
 | ファイル | 行 | 役割 |
 | --- | --- | --- |
-| `Data/database_manager.cs` | 811 | ★DB接続・スキーマ作成・バックアップ・破損検証・復元（`has_active_wal`/`restore_from_file`） |
+| `Data/database_manager.cs` | 812 | ★DB接続・スキーマ作成・バックアップ・破損検証・復元（`has_active_wal`/`restore_from_file`） |
 | `Data/V2Migration.cs` | 296 | スキーマ移行（V2）。**ローカルDBにしか走らない**（NAS DB には別途対応が必要） |
 | `Data/WorkloadMigration.cs` | 206 | ★工数表6テーブルの冪等作成（**v1.2.0 新規**／v1.3.0 で `workload_subgroup_links` 追加＋旧構造からの一度きりの自動変換 `backfill_subgroup_links`） |
 | `Data/ViewStateMigration.cs` | 105 | ★折りたたみ状態2テーブルの冪等作成（**v1.3.0 新規**）。`month_collapse_states`（DDL欠落の是正）/ `workload_collapse_states`。定数 `NO_CATEGORY` / `NO_SUBGROUP` = -1 |
@@ -162,10 +162,10 @@ MVVM構成。`.cs` 実ソース合計 **約22,094行**（obj/bin除く）。以�
 | ファイル | 行 | 役割 |
 | --- | --- | --- |
 | `Services/ExcelImportService.cs` | 1208 | Excel日報の取込・バリデーション（最大ファイル） |
-| `Services/CostAggregationService.cs` | 455 | ★原価集計エンジン（日単位集計）。単価は `parse_m` で `engineer_daily_rate` / `assistant_daily_rate` を参照（`parse_m_any` は**実在しない**／6.4 参照） |
-| `Services/WorkloadAggregationService.cs` | 426 | ★工数表の集計エンジン（**v1.2.0 新規**・業務単位集計と同一計算＋キーワード振り分け）。単価キー優先順を 2026-07-15 に修正（`[9A-fix4]`・6.4 参照） |
-| `Services/PrintService.cs` | 568 | 印刷（プレビュー・列選択） |
-| `Services/Excelexportservice.cs` | 501 | Excel書き出し |
+| `Services/CostAggregationService.cs` | 456 | ★原価集計エンジン（日単位集計）。単価は `parse_m` で `engineer_daily_rate` / `assistant_daily_rate` を参照（`parse_m_any` は**実在しない**／6.4 参照） |
+| `Services/WorkloadAggregationService.cs` | 438 | ★工数表の集計エンジン（**v1.2.0 新規**・業務単位集計と同一計算＋キーワード振り分け）。単価キー優先順を 2026-07-15 に修正（`[9A-fix4]`・6.4 参照）。v1.2.2 で `classify_index` 公開 |
+| `Services/PrintService.cs` | 569 | 印刷（プレビュー・列選択） |
+| `Services/Excelexportservice.cs` | 502 | Excel書き出し |
 | `Services/EditHistoryService.cs` | 178 | Undo/Redo履歴 |
 | `Services/ErrorLogService.cs` | 167 | エラーログ記録（NAS `error_logs`） |
 | `Services/ProjectGroupService.cs` | 174 | ★大区分（会社）構築の共通化（**v1.2.0 新規**・原価集計/工数表で共用） |
@@ -176,14 +176,14 @@ MVVM構成。`.cs` 実ソース合計 **約22,094行**（obj/bin除く）。以�
 ### 3.4 ViewModels（MVVM）
 | ファイル | 行 | 役割 |
 | --- | --- | --- |
-| `ViewModels/filter_tab_view_model.cs` | 1483 | ★絞り込みタブ（集計モード・業務単位集計 `load_task_mode_async`・ⓘ生成）。単価は `get_rate` で `engineer_daily_rate` / `assistant_daily_rate` を参照（工数表もこのキーに統一済み／6.4 参照） |
-| `ViewModels/workload_classify_view_model.cs` | 914 | 工数表の分類設定ダイアログVM（**未コミット新規**・設計書に個別記載なし）。保存反映方式の編集用モデル3種＋9コマンド＋該当件数プレビュー＋`save_async`（1トランザクション）。詳細は「12.1」 |
-| `ViewModels/project_cost_view_model.cs` | 729 | ★案件別原価VM（モード適用・別モード複製） |
-| `ViewModels/workload_view_model.cs` | 790 | ★工数表画面VM（**v1.2.0 新規**・大区分/現場タブ/区分タブ/分類設定への導線）。サブ分類グループの開閉は**「現場タブ × 区分タブ」別**に保持（2026-07-15 `[9D-2]` 修正・12章参照） |
-| `ViewModels/settings_view_model.cs` | 710 | ★設定画面VM（DB設定・管理メニュー・startup_page） |
-| `ViewModels/cost_view_model.cs` | 599 | 原価集計画面の親VM（推測） |
+| `ViewModels/filter_tab_view_model.cs` | 1484 | ★絞り込みタブ（集計モード・業務単位集計 `load_task_mode_async`・ⓘ生成）。単価は `get_rate` で `engineer_daily_rate` / `assistant_daily_rate` を参照（工数表もこのキーに統一済み／6.4 参照） |
+| `ViewModels/workload_classify_view_model.cs` | 1085 | 工数表の分類設定ダイアログVM（develop コミット済み・設計書に個別記載なし）。保存反映方式の編集用モデル3種＋適用先チェック＋該当件数プレビュー＋`save_async`（1トランザクション）。詳細は「12.1」 |
+| `ViewModels/project_cost_view_model.cs` | 730 | ★案件別原価VM（モード適用・別モード複製） |
+| `ViewModels/workload_view_model.cs` | 947 | ★工数表画面VM（**v1.2.0 新規**・大区分/現場タブ/区分タブ/分類設定への導線）。サブ分類グループの開閉は**グループ単位**で保存（2026-07-15 `[Sprint 7E-2]` 修正・12章参照） |
+| `ViewModels/settings_view_model.cs` | 711 | ★設定画面VM（DB設定・管理メニュー・startup_page） |
+| `ViewModels/cost_view_model.cs` | 600 | 原価集計画面の親VM（推測） |
 | `ViewModels/import_view_model.cs` | 491 | 日報取込VM |
-| `ViewModels/main_view_model.cs` | 358 | ★メインVM（ページ遷移・`navigate_to_workload_command`・`is_workload`） |
+| `ViewModels/main_view_model.cs` | 359 | ★メインVM（ページ遷移・`navigate_to_workload_command`・`is_workload`） |
 | `ViewModels/Dashboard_view_model.cs` | 343 | ダッシュボードVM（お知らせ・履歴・自動更新） |
 | `ViewModels/master_employees_view_model.cs` | 301 | 人員マスタVM |
 | `ViewModels/user_management_view_model.cs` | 278 | ユーザー管理VM |
@@ -201,15 +201,15 @@ MVVM構成。`.cs` 実ソース合計 **約22,094行**（obj/bin除く）。以�
 ### 3.5 Views（XAML画面・コードビハインド）
 | ファイル | 行(.cs) | 役割 |
 | --- | --- | --- |
-| `Views/CostPage.xaml(.cs)` | 1805 | ★原価集計画面（現場タブ・折りたたみ・ドラッグ並べ替え・変更▾メニュー） |
+| `Views/CostPage.xaml(.cs)` | 1806 | ★原価集計画面（現場タブ・折りたたみ・ドラッグ並べ替え・変更▾メニュー） |
 | `Views/MainWindow.xaml(.cs)` | 699 | ★メイン（サイドバー＋ヘッダ＋コンテンツ・全ショートカット・startup_page反映・工数表ボタン追加） |
 | `Views/PrintOptionsDialog.xaml(.cs)` | 308 | 印刷設定ダイアログ |
 | `Views/ExcelExportDialog.xaml(.cs)` | 302 | Excel書き出しダイアログ |
 | `Views/ProjectRatesDialog.xaml(.cs)` | 287 | 現場別単価ダイアログ |
 | `Views/FilterTabDialog.xaml(.cs)` | 277 | 絞り込みタブ追加ダイアログ（集計モード継承） |
-| `Views/WorkloadKeywordDialog.xaml(.cs)` | 264 | 工数表キーワード登録ダイアログ（**未コミット新規**・設計書個別記載なし）。明細右クリックから起動・**即時DB反映**（「12.1」参照） |
+| `Views/WorkloadKeywordDialog.xaml(.cs)` | 264 | 工数表キーワード登録ダイアログ（develop コミット済み・設計書個別記載なし）。明細右クリックから起動・**即時DB反映**（「12.1」参照） |
 | `Views/DashboardPage.xaml(.cs)` | 234 | ダッシュボード |
-| `Views/WorkloadCopyDialog.xaml(.cs)` | 220 | 他案件から業務区分をコピーするダイアログ（**未コミット新規**）。**DB書込なし**＝選択分は編集中リストへ渡り分類設定の保存で確定（「12.1」参照） |
+| `Views/WorkloadCopyDialog.xaml(.cs)` | 220 | 他案件から業務区分をコピーするダイアログ（develop コミット済み）。**DB書込なし**＝選択分は編集中リストへ渡り分類設定の保存で確定（「12.1」参照） |
 | `Views/MonthRangeCalendar.xaml(.cs)` | 203 | 月度範囲カレンダー |
 | `Views/SplashWindow.xaml(.cs)` | 193 | 起動スプラッシュ |
 | `Views/FirstLoginDialog.xaml(.cs)` | 176 | 初回ユーザー登録 |
@@ -218,9 +218,9 @@ MVVM構成。`.cs` 実ソース合計 **約22,094行**（obj/bin除く）。以�
 | `Views/ProjectInfoDialog.xaml(.cs)` | 117 | 現場情報ダイアログ |
 | `Views/ProjectEditDialog.xaml(.cs)` | 105 | 現場編集ダイアログ（F2） |
 | `Views/ImportPage.xaml(.cs)` | 98 | 日報取込ページ |
-| `Views/WorkloadPage.xaml(.cs)` | 87 | ★工数表ページ（**v1.2.0 新規**・原価集計と同一の現場タブUI） |
+| `Views/WorkloadPage.xaml(.cs)` | 87 | ★工数表ページ（XAML 485行・**v1.2.0 新規**・原価集計と同一の現場タブUI） |
 | `Views/BulkAttributeDialog.xaml(.cs)` | 80 | 一括属性変更 |
-| `Views/WorkloadClassifyDialog.xaml(.cs)` | 72 | 工数表分類設定ダイアログ（**未コミット新規**・設計書個別記載なし）。3ペイン構成・保存反映方式（「12.1」参照） |
+| `Views/WorkloadClassifyDialog.xaml(.cs)` | 72 | 工数表分類設定ダイアログ（XAML 340行・develop コミット済み・設計書個別記載なし）。3ペイン構成・保存反映方式（「12.1」参照） |
 | `Views/TabNameInputDialog.xaml(.cs)` | 59 | タブ名入力 |
 | `Views/rates_action_dialog.xaml(.cs)` | 57 | 単価アクション |
 | `Views/PlaceholderPage.xaml(.cs)` | 46 | 空ページ |
@@ -231,7 +231,7 @@ MVVM構成。`.cs` 実ソース合計 **約22,094行**（obj/bin除く）。以�
 ### 3.6 Converters / Assets / Models
 - **Converters/**: BoolToVisibility / IntEqual / Inversebool / StringEqual / StringToColorBrush（XAMLバインド変換）
 - **Assets/Styles.xaml**: カラーパレット・スタイル定義
-- **Models/**: `project` `Daily_report`(+`Daily_report_row`) `Daily_equipment` `Daily_transport` `Cost_record` `Cost_row_item`(187行・小計行) `Cost_filter_tab` `employee` `operation_log` `App_setting` `UserSession` `ImportResult`(113行)、**`workload_models.cs`(166行・v1.2.0 新規)**
+- **Models/**: `project` `Daily_report`(+`Daily_report_row`) `Daily_equipment` `Daily_transport` `Cost_record` `Cost_row_item`(188行・小計行) `Cost_filter_tab` `employee` `operation_log` `App_setting` `UserSession` `ImportResult`(113行)、**`workload_models.cs`(198行・v1.2.0 新規／v1.3.0 で `workload_subgroup_link` 等を追加)**
 
 ---
 
@@ -434,8 +434,8 @@ pc_users / user_sessions / operation_logs / error_logs（7日自動削除）/ ap
 | 設定JSON | `%LOCALAPPDATA%\01_EABASE Series\01_CostManager\user_settings.json` |
 | 破損設定退避 | `...\user_settings.json.broken_yyyyMMdd_HHmmss` |
 | GitHubブランチ | リポジトリ `https://github.com/yori-1002/EABASESeries.git`。作業は **develop に集約**し、**リリース時のみ main へ早送り**（2026-07-15 の yori 指示） |
-| publish 出力 | `01_EA_CostManager\EA_CostManager\publish\`（`CostManager.exe` / `01_version.txt` / `icon_fix.ico`）。`.iss` の `MySourceDir` がここを指す |
-| インストーラ出力 | `01_EA_CostManager\installer_output\EA_CostManager_setup_vX.X.X.exe`（`.iss` の `OutputDir` は .iss からの相対） |
+| publish 出力 | `01_EA_CostManager\EA_CostManager\publish\`（`CostManager.exe` / `01_version.txt` / `icon_fix.ico`）。`.iss` の `MySourceDir` がここを指す。**成果物は作成後に外部へコピーし、ワークスペースから削除する運用** |
+| インストーラ出力 | `01_EA_CostManager\installer_output\EA_CostManager_setup_vX.X.X.exe`（`.iss` の `OutputDir` は .iss からの相対）。**成果物はコピー後に削除されるため、現ワークスペースに無い場合は再作成する** |
 | Inno Setup | **`C:\Users\earth\AppData\Local\Programs\Inno Setup 6\`（6.7.1）**。⚠️ **ユーザー領域へのインストール**のため `Program Files` にも HKLM のアンインストール登録にも無い。CLI は同フォルダの `ISCC.exe`（GUI は `Compil32.exe`） |
 | 更新配布先(NAS) | `\\NAS7E6AA6\...\02_Updates\01_Cost Manager\` に `EA_CostManager_setup_vX.X.X.exe` と `01_version.txt` を置くと自動アップデートが発火 |
 
@@ -444,14 +444,23 @@ pc_users / user_sessions / operation_logs / error_logs（7日自動削除）/ ap
 
 ---
 
+> **成果物の保管運用（2026-07-17 yori確認）**
+> - `publish/` と `installer_output/` は、リリース作業時に一時的に作成する。
+> - 作成した exe・インストーラ・version ファイルは、必要な外部保管先へコピーする。
+> - 外部保管後、ワークスペース内の成果物フォルダは削除する。
+> - そのため、通常確認時に `publish/` や `installer_output/` が存在しない状態は異常ではない。
+> - 再配布・再検証が必要な場合は、develop の対象コミットから再度 publish と Inno Setup コンパイルを行う。
+> - MD上の成果物パスは「作成時の出力先」を示すものであり、恒久保管場所ではない。
+> - 成果物の有無だけで「未作成」と判断しない。git log、作業ログ、外部保管先の実物で確認する。
+
 ## 10. 設計書と実装の差分・要確認点（★正確性重視の指摘）
 
-以下は、設計書 v1.2.0 とソース実体の突き合わせで検出した**確認すべき事実**。断定できるものと推測を分けて記載する。
+以下は、設計書 v1.2.1 と本体 v1.3.1 のソース実体を突き合わせて検出した**確認すべき事実**。断定できるものと推測を分けて記載する。
 
 | # | 事実 | 確度 | 影響／推奨アクション |
 | --- | --- | --- | --- |
 | 1 | ~~csproj の `<Version>` が **1.1.0 のまま**~~ → **2026-07-15 解消**。csproj・`setup.iss` とも **v1.3.1** に更新 | **確定**（csproj 34–36行・.iss 29行） | **対応完了**。`.iss` 側は csproj から自動連動しないため、**今後もリリースのたびに2箇所を合わせること**（0章の注意書き参照） |
-| 2 | ~~工数表機能の新規ファイル群が**未コミット**~~ → **2026-07-15 解消**。develop にコミット済み・**2026-07-16 にリリースビルドとインストーラも作成** | **確定**（git log・installer_output） | **対応完了**。残る未了は **main へ未反映**（yori が実行）と **画面での動作確認が未実施**（#12） |
+| 2 | ~~工数表機能の新規ファイル群が**未コミット**~~ → **2026-07-15 解消**。develop にコミット済み・**2026-07-16 にリリースビルドとインストーラも作成** | **確定**（git log・yori 運用） | **対応完了**。成果物は作成後に外部へコピーし、ワークスペース内の `publish/`・`installer_output/` は削除する運用。現ワークスペースに成果物が無いことは異常ではなく、再配布時は再作成する。残る未了は **main へ未反映**（yori が実行）と **画面での動作確認が未実施**（#12） |
 | 3 | 設計書に個別記載のない実装ファイルが存在：`workload_classify_view_model.cs`(914行)・`WorkloadClassifyDialog`・`WorkloadCopyDialog`・`WorkloadKeywordDialog` | **確定**（存在・役割とも 2026-07-15 の精査で確定。「12.1」参照） | 設計書は分類設定UIを「暫定（標準区分セット作成）」とするが、**実装は3ペインの本格的な分類設定UI＋他案件コピー＋明細からのキーワード登録まで到達しており、設計書より先行している**（確定）。→ 次回の設計書更新で反映が必要 |
 | 9 | ~~**工数表と業務単位集計の合計が、サブ分類なしの全体表示でもズレる**（単価キーの優先順が逆）~~ → **2026-07-15 修正済み**（12章の該当ログ参照） | **確定**（実ソース＋実DB調査で裏付け済み） | **対応完了**。`WorkloadAggregationService.cs:173-174` のキー優先順を `engineer_daily_rate`→`engineer_rate` に逆転し、設定画面・日単位集計・業務単位集計・工数表の4者が同じ値を見るようにした。詳細な調査結果は「6.4」参照 |
 | 6 | 設計書 6.1 の「対象案件＝`agg_mode='task'` のみ」という記述が実装と不一致。実装は `cost_filter_tabs`(`agg_mode='task' AND is_archived=0`)との **OR 条件** | **確定**（`workload_view_model:266-277`・`[9A-fix2]` コメント） | 本 md 6.1 は 2026-07-15 に修正済み。**設計書側も次回更新時に要修正** |
@@ -463,9 +472,8 @@ pc_users / user_sessions / operation_logs / error_logs（7日自動削除）/ ap
 | 11 | **運用ルール #1（その都度 md へ反映）が本 md の内部にしか書かれておらず、作業者がこの md を読むまでルールを認識できない**。実際に v1.2.1〜v1.3.1 の7コミットが未反映のまま進行し、yori の指摘で事後にまとめて追記した | **確定**（12章の 2026-07-15 最終ログ・`ls CLAUDE.md` で不在を確認） | **恒久対策としてリポジトリ直下に `CLAUDE.md` の新設を提案**。AIコーディング支援は `CLAUDE.md` を自動で読み込むため、そこに「本台帳の場所」「運用ルール #1〜#4」「続きを進める＝3点を読む」を書けば、**読み忘れが構造的に起きなくなる**。本 md には詳細を残し、`CLAUDE.md` からは参照させる（二重管理を避ける） |
 | 12 | **v1.3.1 の一連の変更は画面での動作確認が未実施**（工数表の分類設定・折りたたみ・原価集計の現場情報バー） | **確定**（作業ログ） | インストーラ作成・配布の前に実機確認を推奨。特に**起動時に DB マイグレーションが走る**（サブ分類の適用先変換・折りたたみテーブル作成）ため、まず工数表の集計値が従来どおりであることを確認すること |
 
-> これらは「バグ」ではなく**リリース確定前の作業途中に見える状態**。正確性重視の観点で、
-> v1.2.0 を正式確定する前に #1〜#3・#6 の整合を取ることを推奨する。
-> ※ #3 の各ダイアログの内部仕様は **2026-07-15 に精査済み**（「12.1」に記載）。この時点で #3・#6 は「推測」から「確定」に更新した。
+> 2026-07-17 時点では、#1・#2・#5・#9 は対応完了済み。残る重要課題は、設計書が本体 v1.3.1 に追随していないこと（#10）、作業者が台帳を読む前に運用ルールへ到達できないこと（#11）、画面での動作確認が未実施であること（#12）。
+> ※ #3 の各ダイアログの内部仕様は **2026-07-15 に精査済み**（「12.1」に履歴として記載）。#3・#4・#6・#7 は #10 の設計書更新にまとめて織り込むこと。
 > ※ **2026-07-15 追記**: #1・#2・#5・#9 は対応完了。**未対応は #10（設計書の追随・最優先）／#11（CLAUDE.md 新設）／#12（実機確認）**。
 > #3・#4・#6・#7 は #10 の設計書更新にまとめて織り込むこと。
 > ※ #9（単価キー不一致）は合計金額に直接影響する**実バグ**だったが、**2026-07-15 に修正済み**（6.4 参照）。
@@ -489,7 +497,7 @@ pc_users / user_sessions / operation_logs / error_logs（7日自動削除）/ ap
 
 ### DIMS 方式による DB 接続設計（提案・未実装）
 
-> 出典: `00_Project_Docs/DIMS_SQLite共有_設計書_v0.1.0.docx`（DIMS 共通基盤・他プロジェクト流用前提）。
+> 出典: `00_Project_Docs/DIMS_SQLite共有_設計書_v0.1.0.docx`（DIMS 共通基盤・他プロジェクト流用前提）。2026-07-17 時点で実ファイルは存在するが、git では未追跡。共有前に Git 管理へ入れるか、別途添付して根拠資料を渡す必要がある。
 > 本節は **AS-IS（現状の確定事実）** と **TO-BE（提案・未実装）** を明確に分ける。
 > TO-BE は 2026-07-15 に yori と方針合意した段階案であり、コードには未反映。
 > ⚠️ この節は codex レビュー対象（レビュー後に DB 接続の実装へ進む予定）。
@@ -542,7 +550,8 @@ DB 接続の中核方針は「NAS の SQLite を直接開くのをやめ、各PC
 | つなぎの安全策 | **Phase 0 を先に入れる** | 本実装完成まで2人目は読取専用。下に具体設計 |
 | 同期対象（D4） | **全テーブル同期** | ⚠️ ただし `user_sessions`（2分ごとに全PCがハートビート更新）を差分ファイルで同期すると changelog が過剰に膨らみ、オンライン表示の即時性も落ちる。**high-churn/リアルタイム系（`user_sessions`・`operation_logs`・`error_logs`）は carve-out して現状方式のまま別扱いにするのを強く推奨**（実装時に再確認）。業務データは全同期でよい |
 | マージ単位（D1） | **列単位マージ** | changelog の payload は**変更列だけ**を記録。別列を編集した同時変更は両方残す。D2（row_version 採番）・D3（FK 適用順）は実装時に決める |
-| codex レビュー | **本節は未レビュー** | yori 運用（設計→codex→実装）に従い、実装着手前に通す |
+| codex レビュー | **2026-07-17 レビュー済み** | codex が本節をレビューし台帳を追記（行数の実測是正・成果物の保管運用・DIMS docx が git 未追跡である点・下記の読取専用強制の指摘）。指摘は妥当と確認済み |
+| 読取専用の強制方式（codex 指摘） | **接続層または共通書込ガードで二重化** | UIボタン無効化だけでは取りこぼした保存経路が書けてしまう。Phase 0 の受入条件として、`create_connection()` 側の読取専用接続、または全書込が通る共通ガードで二重に止める。完全な強制は Phase 1 の書込層集約で担保 |
 
 **Phase 0 実装設計（提案・未実装／codex レビュー対象）**
 
@@ -554,7 +563,7 @@ DB 接続の中核方針は「NAS の SQLite を直接開くのをやめ、各PC
 | ロック内容 | device_id（MAC/pc_name）・user_name・acquired_at・heartbeat_at（ISO8601） |
 | 起動時 | `switch_to_nas`（`database_manager.cs:611`）後に取得を試みる。ロックが無い or heartbeat が陳腐化（既存のセッション掃除と同じ 5分基準）→ 確保して書込可。新しいロックが有る→**読取専用**で開く |
 | ハートビート | 既存 `main_view_model` の2分 `DispatcherTimer`（`:135/139`）を流用して heartbeat_at を更新 |
-| 読取専用の強制 | ⚠️ 書込口が `CostPage.xaml.cs`・各VM・各Service に分散しており完全な強制は難しい。**最小実装＝主要な保存入口（保存・日報取込・単価変更・分類設定保存 等）を読取専用フラグで無効化＋敬語バナー表示**。完全な強制は Phase 1 の書込層集約で担保（Phase 0 と一部重なる＝無駄にならない） |
+| 読取専用の強制 | ⚠️ 書込口が `CostPage.xaml.cs`・各VM・各Service に分散しており、UIボタン無効化だけでは完全な強制にならない。**最小実装＝主要な保存入口（保存・日報取込・単価変更・分類設定保存 等）を読取専用フラグで無効化＋敬語バナー表示**。ただし取りこぼした保存経路は書けてしまうため、Phase 0 の受入条件として `database_manager.create_connection()` 側の読取専用接続、または共通書込ガードで二重に止める設計を検討する。完全な強制は Phase 1 の書込層集約で担保（Phase 0 と一部重なる＝無駄にならない） |
 | 解放 | 終了時にロックファイル削除（既存のセッション掃除と同じくベストエフォート）。異常終了時は陳腐化ロックを次の起動が引き継ぐ |
 | バナー文言（敬語） | 例「他の利用者が編集中のため、閲覧のみのモードで開いております。」 |
 
@@ -588,16 +597,18 @@ DB 接続の中核方針は「NAS の SQLite を直接開くのをやめ、各PC
 | 2026-07-15 | v1.3.0 | `Data/ViewStateMigration.cs`（新規）<br>`App.xaml.cs`<br>`ViewModels/workload_view_model.cs` | **折りたたみ状態が再起動で展開に戻る問題を修正（`[Sprint 7E]`・コミット `b13238f`）**。原因は画面ごとに**別物が2つ**あった。①**原価集計・月度**＝読み書きコード（`filter_tab_view_model` の restore/save 3メソッド）は以前からあったが、**`month_collapse_states` の `CREATE TABLE` がどこにも無く、実DBにも存在しなかった**（テーブル26個中に無し）。両メソッドは例外を `Debug.WriteLine` で握り潰すため**無言で永続化が効いていない**状態だった。テーブルを作ることで既存コードがそのまま機能する。`INSERT OR REPLACE` が UPSERT として成立するよう UNIQUE 索引も付与 ②**工数表**＝そもそも永続化しておらず、開閉状態は VM のフィールドだけにあった（再集計・現場タブ往復では保つが再起動で必ず失われる）。`workload_collapse_states` へ保存し、ページ初期化時に**タブを組み立てる前に**読み戻す。`App.xaml.cs` のローカルDB・NAS DB 両方から呼ぶ（折りたたみ状態は `create_connection()` 経由で読み書きするため NAS 側にもテーブルが必要。`V2Migration` はローカルDBにしか走らないため使えない）。**検証**：実際の `ViewStateMigration` を取り込んだ検証プログラムで6項目（作成の冪等性・既存の月度SQL（UPSERT/復元/一括保存）がそのまま通ること・区分なしタブが重複しないこと・展開時の行削除）を確認。 | 追加 |
 | 2026-07-15 | v1.3.0 | `EA_CostManager.csproj`<br>`EA_CostManager_setup.iss` | **リリース版数を v1.3.0 に確定（コミット `9eb1a23`）**。前回リリースが v1.1.0 で、v1.2.1 / v1.2.2 は develop 内のみの未リリース版のため、新機能（工数表）の追加としてマイナーを上げた。**`.iss` の `MyAppVersion` が v1.1.0 のまま取り残されていた**ことを発見し是正——そのままだと `EA_CostManager_setup_v1.1.0.exe` として出力され、レジストリと「プログラムと機能」の表示も 1.1.0 になるところだった。Inno Setup 側は csproj から自動連動できないため、**両方を合わせる旨を双方のコメントに明記**。 | 修正 |
 | 2026-07-15 | v1.3.1 | `ViewModels/workload_view_model.cs`<br>`Views/WorkloadPage.xaml`<br>`Data/ViewStateMigration.cs`<br>`EA_CostManager.csproj`<br>`EA_CostManager_setup.iss` | **工数表の折りたたみをグループ単位で保存（`[Sprint 7E-2]`・コミット `bdffa52`）**。v1.3.0 でも維持されず、DB を調べると `workload_collapse_states` は**0行＝保存が一度も走っていなかった**（月度側は35行で正常）。原因は保存の粒度とグループとVMの結び方：①状態がタブ単位の bool 1つ（`all_expanded`）しかなく、**見出しを個別に開閉した状態を表現できなかった** ②Expander の `IsExpanded` がタブの `all_expanded` と **`Mode=OneWay`** で結ばれ、個別に開閉しても値がVMへ戻らず保存する手段が無かった ③**グループキーが「笙の川　121 件／…／2,396,050 円」という小計込みの見出し文字列**で、集計値が変わればキーも変わるため開閉状態の安定した目印にできなかった。実装：①`workload_group`（サブ分類ID＋見出し＋開閉状態）を追加し、明細行はこのインスタンスでグループ化（キーがIDベースになり安定） ②`IsExpanded` を `Name.is_expanded` と**双方向**で結び、個別クリックも「すべて折りたたむ」ボタンも**同じ経路でVMに伝わり保存**（ボタンは全グループの `is_expanded` を設定するだけにして保存経路を一本化＝保存漏れが起きない） ③`workload_collapse_states` に `subgroup_id` を追加。旧定義のテーブルが残っていれば検知して作り直す（未リリースかつ保持しているのが折りたたみの好みだけのため） ④「（サブ未分類）」は `NO_SUBGROUP(-1)`（SQLite の UNIQUE は NULL 同士を別物として扱い重複を防げないため） ⑤`all_expanded` をグループ側の状態から算出する値に変更＝`workload_tab_item` から変更通知が不要になり `INotifyPropertyChanged` を除去。**ボタン経路が0行になった直接原因は静的な読みでは特定できず、推測で当てにいかず作りごと入れ替えた**（個別対応には結局この作りを変える必要があり、直せばボタン側も同じ経路を通るため）。**検証**：旧定義テーブルの作り直し・冪等性、グループごとに独立して保存され重複しないこと（サブ未分類・別区分タブの同一サブ分類を含む）、展開に戻すと当該行だけ消えることを確認。行数 VM 790→**946**／XAML 487→**485**。**画面での動作確認は未実施**。 | 修正 |
-| 2026-07-15 | v1.3.1 | `EA_CostManager/publish/`（成果物） | **リリースビルドを作成**。`dotnet publish -c Release -r win-x64 --self-contained true -p:DebugType=embedded -o publish`。出力＝`CostManager.exe`（65.8MB・自己完結シングルファイル）／`01_version.txt`（`1.3.1`・csproj から自動生成）／`icon_fix.ico`。`.iss` の `MySourceDir` が指す場所と一致。EXE のプロパティを実測確認＝FileVersion `1.3.1.0` / ProductVersion `1.3.1+bdffa52`。**インストーラ（Inno Setup）は未作成・main への push も未実施**。 | 追加 |
+| 2026-07-15 | v1.3.1 | `EA_CostManager/publish/`（成果物） | **リリースビルドを作成**。`dotnet publish -c Release -r win-x64 --self-contained true -p:DebugType=embedded -o publish`。出力＝`CostManager.exe`（65.8MB・自己完結シングルファイル）／`01_version.txt`（`1.3.1`・csproj から自動生成）／`icon_fix.ico`。`.iss` の `MySourceDir` が指す場所と一致。EXE のプロパティを実測確認＝FileVersion `1.3.1.0` / ProductVersion `1.3.1+bdffa52`。**インストーラ（Inno Setup）はこの時点では未作成・main への push も未実施**。成果物は外部へコピー後、ワークスペースから削除する運用。 | 追加 |
+| 2026-07-17 | — | `00_Project_Docs/EA_CostManager_記録台帳.md` | **codex が DIMS/Phase 0 節をレビューし台帳を追記（内容を突き合わせ確認）**。①codex の**行数是正が正しいと検証**：対象ファイルは末尾に改行が無く（末尾バイト `7d`＝`}`）、`wc -l` は最終行を数え落とすため、`grep -c`（＝codex の値）が正。従来の台帳の行数は一律 -1 で undercount していた（3章の各行数・合計を是正）。②「未コミット新規」等の陳腐化ラベルを「develop コミット済み」へ是正。③成果物（`publish/`・`installer_output/`）は作成後に外部コピー→ワークスペースから削除する運用＝現存しないことは異常でない旨を追記（実際に両フォルダが存在しないことを確認）。④DIMS docx が git 未追跡である点を指摘。⑤**Phase 0 の読取専用強制はUIボタン無効化だけでは不十分**——取りこぼした保存経路が書けるため、`create_connection()` 側の読取専用接続か共通書込ガードで二重化する、を受入条件に。決定事項表に「読取専用の強制方式」行を追加し codex レビューを「レビュー済み」に更新。 | 追加 |
 | 2026-07-17 | — | `00_Project_Docs/EA_CostManager_記録台帳.md` | **DIMS の DB 接続設計に「決定事項」と「Phase 0 実装設計」を追記（提案・未実装）**。yori が4点を決定：つなぎは Phase 0 先行／同期対象は全テーブル（⚠️ user_sessions 等 high-churn/リアルタイム系は carve-out 推奨と明記）／マージは列単位／codex は未レビュー。Phase 0 の具体設計＝NAS ロックファイル方式（`.tmp`→rename・5分陳腐化基準・既存2分タイマー流用・主要保存入口の読取専用化＋敬語バナー）を表で記載。書込層集約（Phase 1）との重なりも指摘。**codex レビュー対象。レビュー未通過のため実装コードは未着手**（yori 指示「問題なければ進める」のゲート未クリア）。 | 追加 |
 | 2026-07-17 | — | `00_Project_Docs/EA_CostManager_記録台帳.md` | **DIMS 方式による DB 接続設計を 11 章に追記（提案・未実装）**。yori 指示により、DIMS_SQLite共有_設計書_v0.1.0 のレビューと段階実装方針を台帳へ記録。AS-IS（現状の DB 接続の確定事実）と TO-BE（提案）を分離：AS-IS＝`create_connection()` が NAS UNC を直結（`database_manager.cs:70/76/611`）・WAL/busy_timeout=5000/foreign_keys=ON（`:84/91/95`）・WAL は SMB で非対応・行識別GUID/changelog/行バージョン/楽観ロックは無し（主キー全て AUTOINCREMENT、`Guid.NewGuid` は `import_view_model.cs:267` の batch_id のみ）・ローカルDB は `Documents\EA_DataCore\db\ea_core.db`（`:19`）・常駐タイマーは `main_view_model.cs:65/135/139` に既存。TO-BE＝ローカルレプリカ＋変更ファイル受け渡し、常駐エージェントは作らずアプリ内タイマー、Phase 0（NAS ロック＋2人目読取専用）/1（row_guid・row_version・changelog・書込層集約）/2（同期本体）。設計書側の宿題4点（列単位マージ不可・row_version 採番・FK 適用順・同期対象の線引き）も記載。**codex レビュー対象**。引用した行番号・事実はすべて実コードで確認済み。 | 追加 |
-| 2026-07-16 | v1.3.1 | `EA_CostManager/publish/`<br>`installer_output/`（新規）<br>`00_Project_Docs/EA_CostManager_記録台帳.md` | **インストーラを作成（`EA_CostManager_setup_v1.3.1.exe`・60.9MB）**。①**publish を develop 先端で作り直した**——初回ビルドは `bdffa52` 時点で、その後の `7141766`（台帳MDのみの変更）とコード差分は無かったが、EXE に埋め込まれる ProductVersion が `1.3.1+bdffa52` のままで**成果物とコミットの対応が追えなくなる**ため。作り直し後は `1.3.1+7141766` で develop 先端と一致。②`ISCC.exe`（Inno Setup CLI）で `EA_CostManager_setup.iss` をコンパイル。ExitCode 0。**Inno Setup 6.7.1 は `C:\Users\earth\AppData\Local\Programs\Inno Setup 6\` にユーザー領域インストールされており**、`Program Files` にも HKLM のアンインストール登録にも無い（9章に追記）。③**検証**：インストーラのプロパティ＝ProductName `CostManager` / ProductVersion `1.3.1` / CompanyName `EABASE Series`、同梱 EXE の ProductVersion＝`1.3.1+7141766`、`01_version.txt`＝`1.3.1`。④9章に publish 出力先・インストーラ出力先・Inno Setup のパス・NAS 更新配布先を追記。0章／10章 #2 を「インストーラ作成済み」に更新。**未了**：NAS 配置・main への push・画面での動作確認。⚠️ コンパイル時に `Minimum version is set to 6.1 but using 6.1sp1 is recommended` の警告が出るが、`MinVersion=6.1` は既存設定のため**指示外として変更していない**（要判断）。 | 追加 |
+| 2026-07-16 | v1.3.1 | `EA_CostManager/publish/`<br>`installer_output/`（一時成果物）<br>`00_Project_Docs/EA_CostManager_記録台帳.md` | **インストーラを作成（`EA_CostManager_setup_v1.3.1.exe`・60.9MB）**。①**publish を develop 先端で作り直した**——初回ビルドは `bdffa52` 時点で、その後の `7141766`（台帳MDのみの変更）とコード差分は無かったが、EXE に埋め込まれる ProductVersion が `1.3.1+bdffa52` のままで**成果物とコミットの対応が追えなくなる**ため。作り直し後は `1.3.1+7141766` で develop 先端と一致。②`ISCC.exe`（Inno Setup CLI）で `EA_CostManager_setup.iss` をコンパイル。ExitCode 0。**Inno Setup 6.7.1 は `C:\Users\earth\AppData\Local\Programs\Inno Setup 6\` にユーザー領域インストールされており**、`Program Files` にも HKLM のアンインストール登録にも無い（9章に追記）。③**検証**：インストーラのプロパティ＝ProductName `CostManager` / ProductVersion `1.3.1` / CompanyName `EABASE Series`、同梱 EXE の ProductVersion＝`1.3.1+7141766`、`01_version.txt`＝`1.3.1`。④9章に publish 出力先・インストーラ出力先・Inno Setup のパス・NAS 更新配布先を追記。0章／10章 #2 を「インストーラ作成済み」に更新。**運用**：作成した成果物は毎回外部へコピー後、ワークスペースから削除する。現ワークスペースに `publish/`・`installer_output/` が無い場合でも異常ではない。**未了**：NAS 配置・main への push・画面での動作確認。⚠️ コンパイル時に `Minimum version is set to 6.1 but using 6.1sp1 is recommended` の警告が出るが、`MinVersion=6.1` は既存設定のため**指示外として変更していない**（要判断）。 | 追加 |
 | 2026-07-15 | v1.3.1 | `00_Project_Docs/EA_CostManager_記録台帳.md` | **本台帳を v1.2.1〜v1.3.1 の作業に追随させた（運用ルール #1 の取りこぼしを是正）**。⚠️ **経緯の記録**：上記 v1.2.1〜v1.3.1 の一連の作業（コミット `9f772d2`〜`bdffa52` の7コミット）は、**その都度の反映ができておらず、yori の指摘を受けて事後にまとめて追記した**。原因は、運用ルール #1 が本 md の内部にのみ書かれており、作業者（ジェイ）が本 md を読むまでルールの存在を認識していなかったこと。**恒久対策として `CLAUDE.md` の新設を提案**（10章 #11）。反映内容：0章サマリ（版数・リリース経緯・バージョン表記が2箇所ある注意）／3.2（`ViewStateMigration.cs` 追加・`WorkloadMigration.cs` 113→206）／7.4（`workload_subgroup_links` 追加・`category_id` 廃止・モード2値化・適用先の設計変更）／7.5 新設（表示状態テーブル）／12 更新ログ（本表）。行数はすべて実ファイルで実測。 | 修正 |
 
-### 12.1 v1.2.0 工数表機能（遡及記載・2026-07-15 時点で**未コミット**）
+### 12.1 v1.2.0 工数表機能（履歴・現行仕様ではない）
 
 > 本ログ運用の開始前に実装済みだった作業を、実ファイル精査のうえ遡及記載したもの。
-> 状態: `git status` で新規14ファイルが `??`、既存4ファイルが `M`。**コミット・ビルド前**。
+> **注意**: 本節は 2026-07-15 時点の履歴であり、現行 v1.3.1 仕様ではない。現行仕様は 6章・7章・10章と、12章の v1.2.1〜v1.3.1 の更新ログを優先する。
+> 当時の状態: `git status` で新規14ファイルが `??`、既存4ファイルが `M`。**現在は develop にコミット済み**。
 > コード内コメントのスプリント表記は `Sprint 7A / 7B / 7C-1 / 7C-fix1〜fix5 / 7D-1 / 9A / 9A-fix2 / 9A-fix3` が混在（v1.2.0 がこれらの累積である点は**推測**）。
 
 #### 新規追加ファイル（14本・.cs 合計 3,136行／XAML 含む全体 4,064行）
