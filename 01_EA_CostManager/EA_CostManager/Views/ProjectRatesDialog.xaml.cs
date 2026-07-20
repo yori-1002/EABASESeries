@@ -182,6 +182,7 @@ namespace EA_CostManager.Views
         // ---- 保存 ----
         private async void btn_save_Click(object sender, RoutedEventArgs e)
         {
+            if (ReadOnlyGuard.block_if_read_only(this)) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             try
             {
                 using var conn = database_manager.create_connection();

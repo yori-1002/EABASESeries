@@ -71,6 +71,11 @@ namespace EA_CostManager.Services
             string operator_name = "",
             int? project_id = null)  // ▼▼▼ 追加：現場別単価適用時に渡すproject_id ▼▼▼
         {
+            // ▼ 追加 [Sprint 8 / Phase 0]：読取専用モードでは集計（cost_records の DELETE→INSERT 洗い替え）を止める。
+            //   例外ではなくエラー文字列で返す（呼び出し側は既にエラー表示に対応済み）。
+            if (UserSession.is_read_only)
+                return (0, "閲覧のみのモードのため、集計（保存）は実行できません。");
+
             try
             {
                 using var conn = database_manager.create_connection();

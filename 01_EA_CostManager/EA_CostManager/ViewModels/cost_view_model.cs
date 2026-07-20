@@ -400,6 +400,7 @@ namespace EA_CostManager.ViewModels
         /// </summary>
         private async Task save_all_sort_order_async()
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]（現場タブの並べ替え保存）
             try
             {
                 using var conn = database_manager.create_connection();

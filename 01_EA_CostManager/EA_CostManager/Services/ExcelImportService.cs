@@ -118,6 +118,10 @@ public class ExcelImportService : IExcelImportService
         string imported_by,
         IProgress<string>? progress = null)
     {
+        // ▼ 追加 [Sprint 8 / Phase 0]：hard backstop。UIガードを取りこぼしても、
+        //   読取専用モードでは取込の書込（daily_reports 等の DELETE 洗い替え）を実行させない。
+        EA_CostManager.Data.database_manager.ensure_writable();
+
         var result = new ImportResult
         {
             file_name = Path.GetFileName(file_path),

@@ -30,6 +30,18 @@ namespace EA_CostManager.Views
             //   これにより、大区分の選択状態は原価集計側と完全に独立する。
             workload_group_list.ItemsSource = workload_page.vm.group_items;
 
+            // ▼ 追加 [Sprint 8 / Phase 0]：読取専用モードのとき最上部の赤帯バナーを表示する。
+            //   is_read_only は起動時のロック取得結果（App.xaml.cs）で確定済みのため、ここで一度読むだけでよい。
+            if (EA_CostManager.UserSession.is_read_only)
+            {
+                read_only_banner.Visibility = Visibility.Visible;
+                if (!string.IsNullOrWhiteSpace(EA_CostManager.UserSession.read_only_reason))
+                {
+                    read_only_banner_text.Text =
+                        $"{EA_CostManager.UserSession.read_only_reason}、閲覧のみのモードで開いております（保存・変更はできません）。";
+                }
+            }
+
             // ▼▼▼ Sprint 5A：Loadedイベントでユーザー確認 ▼▼▼
             Loaded += async (_, _) =>
             {

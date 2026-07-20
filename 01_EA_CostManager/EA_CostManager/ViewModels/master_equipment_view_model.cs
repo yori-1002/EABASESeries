@@ -86,6 +86,7 @@ namespace EA_CostManager.ViewModels
 
         private async Task save_async()
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             try
             {
                 using var conn = database_manager.create_connection();
@@ -124,6 +125,7 @@ namespace EA_CostManager.ViewModels
 
         private async Task delete_async(equipment_row? row)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (row == null) return;
 
             // 新規行はDBに存在しないのでコレクションから除くだけ
@@ -155,6 +157,7 @@ namespace EA_CostManager.ViewModels
 
         private async Task toggle_active_async(equipment_row row)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             try
             {
                 row.is_active = !row.is_active;

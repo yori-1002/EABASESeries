@@ -190,6 +190,9 @@ namespace EA_CostManager.ViewModels
         // ▼ v0.9.7 追加：取込完了後にバリデーションエラー一覧 / 新規登録社員一覧を MessageBox 表示
         private async Task execute_import()
         {
+            // ▼ 追加 [Sprint 8 / Phase 0]：読取専用モードでは取込（＝大量の書込）を止める
+            if (ReadOnlyGuard.block_if_read_only()) return;
+
             is_busy = true;
             result_message = string.Empty;
 

@@ -206,6 +206,7 @@ namespace EA_CostManager.ViewModels
         /// <summary>結合設定を追加する</summary>
         private async Task add_async()
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             var parent = new_parent_code.Trim().ToUpper();
             var child = new_child_code.Trim().ToUpper();
 
@@ -227,6 +228,7 @@ namespace EA_CostManager.ViewModels
         /// <summary>結合設定を削除する</summary>
         private async Task delete_async(category_group_item item)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             var result = System.Windows.MessageBox.Show(
                 $"「{item.parent_code} ← {item.child_code}」の結合設定を削除しますか？\n\n" +
                 "削除後、原価集計画面を再読み込みすると個別のタブに戻ります。",

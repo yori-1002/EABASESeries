@@ -174,6 +174,7 @@ namespace EA_CostManager.Views
 
         private async void btn_create_Click(object sender, RoutedEventArgs e)
         {
+            if (ReadOnlyGuard.block_if_read_only(this)) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (string.IsNullOrWhiteSpace(txt_tab_name.Text))
             {
                 txt_error.Text = "タブ名は必須です";

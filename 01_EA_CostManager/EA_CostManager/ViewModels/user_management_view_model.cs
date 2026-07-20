@@ -150,6 +150,7 @@ namespace EA_CostManager.ViewModels
 
         private async Task save_async()
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (!can_edit)
             {
                 status = "⚠️ 管理者権限が必要です。";

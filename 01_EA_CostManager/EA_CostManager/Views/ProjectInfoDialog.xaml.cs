@@ -62,6 +62,7 @@ namespace EA_CostManager.Views
 
         private async void btn_register_Click(object sender, RoutedEventArgs e)
         {
+            if (ReadOnlyGuard.block_if_read_only(this)) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             string site_name = txt_site_name.Text?.Trim() ?? "";
 
             if (string.IsNullOrWhiteSpace(site_name))

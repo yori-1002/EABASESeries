@@ -29,6 +29,7 @@ namespace EA_CostManager.Views
 
         private async void btn_save_Click(object sender, RoutedEventArgs e)
         {
+            if (ReadOnlyGuard.block_if_read_only(this)) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             // ▼▼▼ 区分コードのバリデーション
             string new_cat = txt_category_code.Text?.Trim() ?? "";
             if (string.IsNullOrWhiteSpace(new_cat))

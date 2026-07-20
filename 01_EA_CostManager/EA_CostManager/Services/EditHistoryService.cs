@@ -81,6 +81,8 @@ namespace EA_CostManager.Services
         /// <returns>影響した project_id（呼び出し元でリロードに使用）/ -1=失敗</returns>
         public static async Task<int> undo_async()
         {
+            // ▼ 追加 [Sprint 8 / Phase 0]：読取専用モードでは Undo（projects/cost_records の書き戻し）を行わない
+            if (UserSession.is_read_only) return -1;
             if (!can_undo) return -1;
 
             var snap = _undo_stack.Pop();
@@ -98,6 +100,8 @@ namespace EA_CostManager.Services
         /// </summary>
         public static async Task<int> redo_async()
         {
+            // ▼ 追加 [Sprint 8 / Phase 0]：読取専用モードでは Redo（projects/cost_records の書き戻し）を行わない
+            if (UserSession.is_read_only) return -1;
             if (!can_redo) return -1;
 
             var snap = _redo_stack.Pop();

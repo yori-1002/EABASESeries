@@ -206,6 +206,7 @@ namespace EA_CostManager.ViewModels
         // ---- 全行を保存（INSERT or UPDATE） ----
         private async Task save_async()
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             try
             {
                 using var conn = database_manager.create_connection();
@@ -284,6 +285,7 @@ namespace EA_CostManager.ViewModels
         // ---- 在籍状態のON/OFF切り替え ----
         private async Task toggle_active_async(employee_row row)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             try
             {
                 row.is_active = !row.is_active;

@@ -107,6 +107,7 @@ namespace EA_CostManager.ViewModels
         // ---- app_settings に保存 ----
         private async Task save_async()
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             try
             {
                 using var conn = database_manager.create_connection();

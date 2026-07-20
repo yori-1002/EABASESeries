@@ -493,6 +493,10 @@ namespace EA_CostManager.Views
             var project_vm = find_ancestor<project_cost_view_model>(text_block);
             if (project_vm == null) return;
 
+            // ▼ 追加 [Sprint 8 / Phase 0]：以下の switch は全て書込（改名・削除・アーカイブ等）。
+            //   閲覧のみの show_archived は上で早期returnしているためガード対象外。
+            if (ReadOnlyGuard.block_if_read_only()) return;
+
             switch (tag)
             {
                 case "rename":
@@ -576,6 +580,8 @@ namespace EA_CostManager.Views
         // ▼▼▼ 追加：現場タブ右クリックメニューのクリックハンドラー ▼▼▼
         private async void project_tab_menu_Click(object sender, RoutedEventArgs e)
         {
+            // ▼ 追加 [Sprint 8 / Phase 0]：このメニューは全分岐が書込（属性変更・アーカイブ・一括）
+            if (ReadOnlyGuard.block_if_read_only()) return;
             if (sender is not MenuItem menu_item) return;
             string tag = menu_item.Tag?.ToString() ?? "";
 
@@ -792,6 +798,7 @@ namespace EA_CostManager.Views
         // 現在の現場の全期間データを再集計してタブを更新する
         private async void btn_reaggregate_current_Click(object sender, RoutedEventArgs e)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (sender is not System.Windows.Controls.Button btn) return;
             var project_vm = btn.Tag as project_cost_view_model;
             if (project_vm == null) return;
@@ -825,6 +832,7 @@ namespace EA_CostManager.Views
         // ▼▼▼ 追加：人員単価変更ボタンのハンドラー ▼▼▼
         private async void btn_change_rates_Click(object sender, RoutedEventArgs e)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (sender is not System.Windows.Controls.Button btn) return;
             var project_vm = btn.Tag as project_cost_view_model;
             if (project_vm == null) return;
@@ -1178,6 +1186,7 @@ namespace EA_CostManager.Views
         // ▼▼▼ 追加(B)：再集計ボタン（この現場の全タブを集計し直す） ▼▼▼
         private async void btn_reaggregate_Click(object sender, RoutedEventArgs e)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (sender is not System.Windows.Controls.Button btn) return;
             if (btn.Tag is not project_cost_view_model project_vm) return;
             await project_vm.reaggregate_all_async();
@@ -1663,6 +1672,7 @@ namespace EA_CostManager.Views
         /// </summary>
         public async Task bulk_change_attribute_async()
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (_multi_selected_tabs.Count < 2) return; // 2件未満なら通常処理のはず
             if (_vm == null) return;
 
@@ -1725,6 +1735,7 @@ namespace EA_CostManager.Views
         /// </summary>
         public async Task bulk_archive_async()
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (_multi_selected_tabs.Count < 2) return;
             if (_vm == null) return;
 

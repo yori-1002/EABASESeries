@@ -80,6 +80,7 @@ namespace EA_CostManager.ViewModels
         // ---- 新規マッピングを追加 ----
         private async Task add_async()
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (string.IsNullOrWhiteSpace(new_legacy_name) || string.IsNullOrWhiteSpace(new_display_name))
             {
                 status = "⚠️ 旧形式氏名と略称の両方を入力してください";
@@ -107,6 +108,7 @@ namespace EA_CostManager.ViewModels
         // ---- マッピングを削除 ----
         private async Task delete_async(legacy_name_row? row)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (row == null) return;
 
             var result = MessageBox.Show(

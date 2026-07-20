@@ -17,6 +17,18 @@
         <conv:BoolToVisibilityConverter x:Key="bool_to_vis" />
     </Window.Resources>
 
+    <DockPanel>
+
+        <!-- ▼ 追加 [Sprint 8 / Phase 0]：読取専用バナー。他PCが編集中のとき最上部に赤帯で表示する。
+             表示可否・文言は MainWindow のコンストラクタで UserSession.is_read_only から設定する。 -->
+        <Border x:Name="read_only_banner" DockPanel.Dock="Top"
+                Background="#C0392B" Padding="12,6" Visibility="Collapsed">
+            <TextBlock x:Name="read_only_banner_text"
+                       Foreground="White" FontWeight="Bold" FontSize="13"
+                       HorizontalAlignment="Center" TextWrapping="Wrap"
+                       Text="閲覧のみのモードで開いております（他の利用者が編集中のため、保存・変更はできません）。" />
+        </Border>
+
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="83" />
@@ -297,4 +309,5 @@
             </Grid>
         </Grid>
     </Grid>
+    </DockPanel>
 </Window>

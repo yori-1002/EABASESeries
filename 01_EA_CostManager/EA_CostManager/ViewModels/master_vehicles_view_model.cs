@@ -76,6 +76,7 @@ namespace EA_CostManager.ViewModels
 
         private async Task save_async()
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             try
             {
                 using var conn = database_manager.create_connection();
@@ -110,6 +111,7 @@ namespace EA_CostManager.ViewModels
 
         private async Task toggle_active_async(vehicle_row row)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             try
             {
                 row.is_active = !row.is_active;

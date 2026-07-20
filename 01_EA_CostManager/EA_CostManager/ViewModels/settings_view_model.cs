@@ -471,6 +471,7 @@ namespace EA_CostManager.ViewModels
 
         private async Task save_settings_async()
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (is_busy) return;
             is_busy = true;
             status_message = "設定を保存しています...";

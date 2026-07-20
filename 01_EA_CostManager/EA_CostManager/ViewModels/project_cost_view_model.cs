@@ -258,6 +258,7 @@ namespace EA_CostManager.ViewModels
         // ▼▼▼ 追加(B)：選んだモードを表示中タブに適用（その場切替・非破壊） ▼▼▼
         public async Task apply_mode_to_current_async(filter_tab_view_model? tab, string mode)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (tab == null) return;
             mode = (mode == "task") ? "task" : "daily";
             if (tab.agg_mode == mode) return;   // 同一モードなら無駄な再集計をしない
@@ -292,6 +293,7 @@ namespace EA_CostManager.ViewModels
         // ▼▼▼ 追加(B)：選んだモードで現在タブを複製し、新しい絞り込みタブを作る ▼▼▼
         public async Task duplicate_with_mode_async(filter_tab_view_model? tab, string mode)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (tab == null) return;
             mode = (mode == "task") ? "task" : "daily";
             string suffix = mode == "task" ? "（業務単位）" : "（日単位）";
@@ -392,6 +394,7 @@ namespace EA_CostManager.ViewModels
         /// <summary>絞り込みタブを削除</summary>
         private async Task delete_filter_tab_async(filter_tab_view_model ft)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             using var conn = database_manager.create_connection();
             await conn.ExecuteAsync(
                 "DELETE FROM cost_filter_tabs WHERE id = @id",
@@ -502,6 +505,7 @@ namespace EA_CostManager.ViewModels
         /// <summary>絞り込みタブをアーカイブ（is_archived=1に更新・画面から非表示）</summary>
         private async Task archive_filter_tab_async(filter_tab_view_model ft)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             using var conn = database_manager.create_connection();
             await conn.ExecuteAsync(
                 "UPDATE cost_filter_tabs SET is_archived = 1 WHERE id = @id",
@@ -528,6 +532,7 @@ namespace EA_CostManager.ViewModels
         // ▼▼▼ 追加：アーカイブ済みタブを復元（is_archived=0に戻して再表示） ▼▼▼
         public async Task restore_filter_tab_async(cost_filter_tab model)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             using var conn = database_manager.create_connection();
             await conn.ExecuteAsync(
                 "UPDATE cost_filter_tabs SET is_archived = 0 WHERE id = @id",

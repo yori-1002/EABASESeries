@@ -44,6 +44,7 @@ namespace EA_CostManager.Views
         /// </summary>
         private async void save_click(object sender, RoutedEventArgs e)
         {
+            if (ReadOnlyGuard.block_if_read_only(this)) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             commit_pending_edits();
 
             bool ok = await _vm.save_async();

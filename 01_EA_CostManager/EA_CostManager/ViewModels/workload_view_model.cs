@@ -196,6 +196,9 @@ namespace EA_CostManager.ViewModels
         private static async Task save_collapse_state_async(
             int project_id, int? category_id, int? subgroup_id, bool expanded)
         {
+            // ▼ 追加 [Sprint 8 / Phase 0]：読取専用PCは折りたたみ状態を NAS へ書かない（同時書込を避ける）。
+            //   画面上の開閉自体は可能（このメソッドはDB保存だけを担うため、表示には影響しない）。
+            if (UserSession.is_read_only) return;
             try
             {
                 int cat = category_id ?? ViewStateMigration.NO_CATEGORY;

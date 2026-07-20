@@ -180,6 +180,7 @@ namespace EA_CostManager.Views
 
         private async void ok_click(object sender, RoutedEventArgs e)
         {
+            if (ReadOnlyGuard.block_if_read_only(this)) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             string w = (keyword ?? "").Trim();
             if (w.Length == 0)
             {

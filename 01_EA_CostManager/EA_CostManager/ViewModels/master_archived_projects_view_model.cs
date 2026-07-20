@@ -86,6 +86,7 @@ namespace EA_CostManager.ViewModels
         // ---- 現場を復元（is_active=1 に戻す） ----
         private async Task restore_async(archived_project_row? row)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (row == null) return;
 
             var result = MessageBox.Show(
@@ -113,6 +114,7 @@ namespace EA_CostManager.ViewModels
         // ---- 現場を完全削除（projects + 関連cost_records を削除、不可逆） ----
         private async Task delete_permanent_async(archived_project_row? row)
         {
+            if (ReadOnlyGuard.block_if_read_only()) return;   // ▼ 追加 [Sprint 8 / Phase 0]
             if (row == null) return;
 
             // 2段階確認（完全削除は慎重に）

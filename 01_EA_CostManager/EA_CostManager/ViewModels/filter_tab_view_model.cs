@@ -1146,6 +1146,8 @@ namespace EA_CostManager.ViewModels
         // INSERT OR REPLACE でUPSERT（既存行は更新・なければ挿入）
         private async Task save_collapse_state_async(string fiscal_month, bool is_collapsed)
         {
+            // ▼ 追加 [Sprint 8 / Phase 0]：読取専用PCは折りたたみ状態を NAS へ書かない（同時書込を避ける）
+            if (UserSession.is_read_only) return;
             try
             {
                 using var conn = database_manager.create_connection();
@@ -1171,6 +1173,8 @@ namespace EA_CostManager.ViewModels
         // 一旦このタブの全行を削除してから再挿入（トランザクションで整合性確保）
         private async Task save_all_collapse_states_async()
         {
+            // ▼ 追加 [Sprint 8 / Phase 0]：読取専用PCは折りたたみ状態を NAS へ書かない（同時書込を避ける）
+            if (UserSession.is_read_only) return;
             try
             {
                 using var conn = database_manager.create_connection();
