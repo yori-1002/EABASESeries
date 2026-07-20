@@ -71,6 +71,35 @@ namespace EA_CostManager.Data
         }
 
         /// <summary>
+        /// ▼ 追加 [Sprint 8 / Phase 0]：読取専用モードで書込を試みたときに投げる例外。
+        /// つなぎの安全策（NAS 書込ロック）中に、業務データの保存が行われないようにする。
+        /// </summary>
+        public class ReadOnlyModeException : System.InvalidOperationException
+        {
+            public ReadOnlyModeException(string message) : base(message) { }
+        }
+
+        /// <summary>
+        /// ▼ 追加 [Sprint 8 / Phase 0]：共通書込ガード。
+        /// 業務データを保存する処理の入口で最初に呼ぶ。読取専用モードなら例外を投げて保存を止める。
+        ///
+        /// ⚠️ 注意：これは接続を読取専用にするものではない（セッションのハートビート等、
+        ///    アプリが正当に書き込む処理まで壊さないため）。あくまで「業務保存の入口で止める」ガード。
+        ///    取りこぼした保存経路が残りうる点は、Phase 1 の書込層集約で airtight にする。
+        ///    ローカル保存方式（Phase 2）完成後は本ガードごと撤去する。
+        /// </summary>
+        public static void ensure_writable()
+        {
+            if (UserSession.is_read_only)
+            {
+                string reason = string.IsNullOrWhiteSpace(UserSession.read_only_reason)
+                    ? "他の利用者が編集中のため" : UserSession.read_only_reason;
+                throw new ReadOnlyModeException(
+                    $"{reason}、現在は閲覧のみのモードで開いております。保存はできません。");
+            }
+        }
+
+        /// <summary>
         /// 新しいSQLite接続を生成（WALモード + busy_timeout）
         /// </summary>
         public static SqliteConnection create_connection()

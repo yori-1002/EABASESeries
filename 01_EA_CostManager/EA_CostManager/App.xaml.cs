@@ -388,6 +388,32 @@ namespace EA_CostManager
                         {
                             write_log($"INDEXマイグレーションスキップ（NAS DB）: {ex_mig3.Message}");
                         }
+
+                        // ▼▼▼ 追加 [Sprint 8 / Phase 0] NAS 書込ロックの取得（つなぎの安全策） ▼▼▼
+                        // NAS 直結のまま2台が同時に書くと DB が破損するため、1台だけが書込ロックを保持し、
+                        // 他PCは読取専用で開く。ロックが取れなければ読取専用フラグを立てる。
+                        // ※ ローカル保存方式（Phase 2）完成後は本処理ごと撤去する。
+                        try
+                        {
+                            if (NasWriteLock.try_acquire(out string holder))
+                            {
+                                write_log("NAS 書込ロック取得（このPCが編集可能）");
+                                UserSession.set_read_only(false);
+                            }
+                            else
+                            {
+                                write_log($"NAS 書込ロックは他PCが保持中 → 読取専用で続行（保持者: {holder}）");
+                                UserSession.set_read_only(true,
+                                    string.IsNullOrWhiteSpace(holder) ? "他の利用者が編集中のため"
+                                                                      : $"{holder} さんが編集中のため");
+                            }
+                        }
+                        catch (Exception ex_lock)
+                        {
+                            // 取得処理自体が失敗した場合はフェイルセーフで書込可能のまま続行
+                            write_log($"NAS 書込ロック処理エラー（書込可能として続行）: {ex_lock.Message}");
+                            UserSession.set_read_only(false);
+                        }
                     }
                     else
                     {

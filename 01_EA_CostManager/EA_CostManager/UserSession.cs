@@ -19,6 +19,22 @@ namespace EA_CostManager
         // ログイン済みかどうか
         public static bool is_logged_in => user_id > 0;
 
+        // ▼ 追加 [Sprint 8 / Phase 0]：このPCが読取専用で開いているか（つなぎの安全策）
+        //   他PCが NAS 書込ロックを保持している場合に true になる。
+        //   ※ ローカル保存方式（Phase 2）が完成したら本フラグごと撤去する。
+        /// <summary>このPCが読取専用モードか（他PCが編集中のため書込不可）</summary>
+        public static bool is_read_only { get; private set; } = false;
+
+        /// <summary>読取専用になっている理由（バナー表示用。例：「〇〇さんが編集中」）</summary>
+        public static string read_only_reason { get; private set; } = "";
+
+        /// <summary>読取専用モードを設定する（起動時のロック取得結果を反映する）</summary>
+        public static void set_read_only(bool read_only, string reason = "")
+        {
+            is_read_only = read_only;
+            read_only_reason = reason;
+        }
+
         /// <summary>ログイン情報を設定する</summary>
         public static void set(int id, string name, int emp_id, bool admin)
         {

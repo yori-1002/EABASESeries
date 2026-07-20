@@ -175,6 +175,10 @@ namespace EA_CostManager.ViewModels
             CancellationToken token = _cts.Token;
             try
             {
+                // ▼ 追加 [Sprint 8 / Phase 0]：NAS 書込ロックの heartbeat を同じ2分周期で更新する。
+                //   保持中のPCだけが更新される（他PCでは no-op）。取得時に未確定だったユーザー名も反映される。
+                NasWriteLock.heartbeat();
+
                 string mac = EA_CostManager.UserSession.fetch_mac_address();
                 using var conn = database_manager.create_connection();
 

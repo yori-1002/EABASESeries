@@ -598,6 +598,11 @@ namespace EA_CostManager.Views
             catch { /* 全例外を無視して終了へ */ }
             finally
             {
+                // ▼ 追加 [Sprint 8 / Phase 0]：NAS 書込ロックを解放する（保持中のPCのみ実行）。
+                //   読取専用PCでは _held=false のため no-op（他PCのロックは消さない）。
+                //   解放漏れが起きても次の起動が陳腐化（5分）として引き継ぐため致命的ではない。
+                try { EA_CostManager.Data.NasWriteLock.release(); } catch { /* ベストエフォート */ }
+
                 // ▼▼▼ 修正（v0.9.6）：force_exit_timer は Dispose しない ▼▼▼
                 // 旧実装：force_exit_timer.Dispose()  ← これが保険を消す原因だった
                 // 新実装：3秒後の Environment.Exit(0) を保険として最後まで有効に保つ。
